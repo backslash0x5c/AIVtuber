@@ -1,0 +1,217 @@
+# 24時間ラジオ対話配信システム
+
+YouTubeライブ配信でコメントに自動応答する24時間ラジオ配信システムです。
+
+## 機能
+
+- YouTubeライブチャットからコメントを取得
+- Ollama (gemma2:2b) を使用したAI応答生成
+- VOICEVOXによる音声合成
+- FFmpegを使用したYouTubeライブ配信
+- コメントがない時の自動雑談機能
+- 会話履歴を保持して文脈に沿った対話
+
+## システム要件
+
+- **OS**: Ubuntu Server (CLI環境)
+- **Python**: 3.8以上
+- **FFmpeg**: 音声エンコードと配信用
+- **Ollama**: ローカルLLM実行環境
+- **VOICEVOX**: 音声合成エンジン
+
+## インストール
+
+### 1. 必要なソフトウェアのインストール
+
+```bash
+# システムパッケージの更新
+sudo apt update && sudo apt upgrade -y
+
+# FFmpegのインストール
+sudo apt install -y ffmpeg python3 python3-pip
+
+# Ollamaのインストール
+curl -fsSL https://ollama.com/install.sh | sh
+
+# VOICEVOXのインストール
+# https://voicevox.hiroshiba.jp/ から最新版をダウンロード
+```
+
+### 2. プロジェクトのセットアップ
+
+```bash
+# リポジトリをクローン
+git clone <repository-url>
+cd radio-streaming
+
+# セットアップスクリプトを実行
+./setup.sh
+```
+
+### 3. 環境変数の設定
+
+`.env`ファイルを編集して、必要な設定を入力します:
+
+```bash
+nano .env
+```
+
+必須設定:
+- `YOUTUBE_VIDEO_ID`: YouTubeライブ配信のビデオID
+- `YOUTUBE_STREAM_KEY`: YouTube配信キー
+
+オプション設定:
+- `OLLAMA_MODEL`: 使用するLLMモデル (デフォルト: gemma2:2b)
+- `VOICEVOX_SPEAKER_ID`: 話者ID (デフォルト: 1)
+- `IDLE_CHAT_INTERVAL`: 雑談までの待機時間（秒）
+
+### 4. Ollamaモデルのダウンロード
+
+```bash
+ollama pull gemma2:2b
+```
+
+## 使用方法
+
+### 1. 必要なサービスを起動
+
+#### VOICEVOXの起動
+
+```bash
+# VOICEVOXを起動（別のターミナルで）
+./voicevox_engine/run
+```
+
+#### Ollamaの起動
+
+```bash
+# Ollamaサーバーを起動（別のターミナルで）
+ollama serve
+```
+
+### 2. ラジオ配信システムの起動
+
+```bash
+python3 -m src.main
+```
+
+### 3. 停止方法
+
+`Ctrl+C` を押してプログラムを停止します。
+
+## システムフロー
+
+```
+YouTubeコメント取得
+       ↓
+   コメントあり?
+  ↙          ↘
+YES          NO
+ ↓            ↓
+コメント処理  30秒経過?
+ ↓            ↓
+Ollama応答   雑談生成
+ ↓            ↓
+ └─→ VOICEVOX ←┘
+       ↓
+    音声合成
+       ↓
+  YouTube配信
+```
+
+## ファイル構成
+
+```
+radio-streaming/
+├── src/
+│   ├── __init__.py          # パッケージ初期化
+│   ├── main.py              # メインプログラム
+│   ├── config.py            # 設定管理
+│   ├── youtube_client.py    # YouTubeコメント取得
+│   ├── ollama_client.py     # Ollama API連携
+│   ├── voicevox_client.py   # VOICEVOX連携
+│   └── audio_streamer.py    # FFmpeg音声配信
+├── requirements.txt         # Python依存パッケージ
+├── setup.sh                # セットアップスクリプト
+├── .env.example            # 環境変数テンプレート
+├── .env                    # 環境変数設定（要作成）
+└── README.md               # このファイル
+```
+
+## トラブルシューティング
+
+### VOICEVOXに接続できない
+
+- VOICEVOXが起動しているか確認
+- `http://localhost:50021`でアクセスできるか確認
+
+```bash
+curl http://localhost:50021/version
+```
+
+### Ollamaに接続できない
+
+- Ollamaサービスが起動しているか確認
+- モデルがダウンロードされているか確認
+
+```bash
+ollama list
+```
+
+### YouTubeコメントが取得できない
+
+- `YOUTUBE_VIDEO_ID`が正しいか確認
+- ライブ配信が開始されているか確認
+- チャット機能が有効になっているか確認
+
+### FFmpegエラー
+
+- FFmpegがインストールされているか確認
+- `YOUTUBE_STREAM_KEY`が正しいか確認
+
+```bash
+ffmpeg -version
+```
+
+## 設定のカスタマイズ
+
+### 雑談の頻度を変更
+
+`.env`ファイルで`IDLE_CHAT_INTERVAL`を変更:
+
+```
+IDLE_CHAT_INTERVAL=60  # 60秒後に雑談
+```
+
+### 会話履歴の保持数を変更
+
+`.env`ファイルで`MAX_CONVERSATION_HISTORY`を変更:
+
+```
+MAX_CONVERSATION_HISTORY=20  # 最大20件の会話を記憶
+```
+
+### VOICEVOXの話者を変更
+
+利用可能な話者を確認:
+
+```bash
+curl http://localhost:50021/speakers | python3 -m json.tool
+```
+
+`.env`ファイルで`VOICEVOX_SPEAKER_ID`を変更:
+
+```
+VOICEVOX_SPEAKER_ID=3  # 話者IDを変更
+```
+
+## ライセンス
+
+このプロジェクトはMITライセンスの下で公開されています。
+
+## 注意事項
+
+- 24時間配信を行う場合は、サーバーの安定性とネットワーク接続を確認してください
+- YouTube配信にはYouTubeの利用規約を遵守してください
+- LLMの応答内容には責任を持ってください
+- VOICEVOXの利用規約を確認してください
