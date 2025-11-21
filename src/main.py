@@ -1,7 +1,5 @@
 """24時間ラジオ対話配信メインプログラム"""
 import time
-import signal
-import sys
 from .config import Config
 from .youtube_client import YouTubeClient
 from .ollama_client import OllamaClient
@@ -20,16 +18,6 @@ class RadioStreamingBot:
 
         self.running = False
         self.last_comment_time = time.time()
-
-        # シグナルハンドラを設定
-        signal.signal(signal.SIGINT, self.signal_handler)
-        signal.signal(signal.SIGTERM, self.signal_handler)
-
-    def signal_handler(self, signum, frame):
-        """シグナル受信時の処理"""
-        print("\n終了シグナルを受信しました。クリーンアップ中...")
-        self.stop()
-        sys.exit(0)
 
     def initialize(self):
         """各コンポーネントの初期化"""
@@ -193,8 +181,6 @@ class RadioStreamingBot:
                 # 少し待機
                 time.sleep(Config.COMMENT_CHECK_INTERVAL)
 
-        except KeyboardInterrupt:
-            print("\n\nキーボード割り込みを受信しました。")
         except Exception as e:
             print(f"\n予期しないエラーが発生しました: {e}")
         finally:
