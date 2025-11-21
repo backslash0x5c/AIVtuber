@@ -59,7 +59,7 @@ class OllamaClient:
                     "messages": messages,
                     "stream": False
                 },
-                timeout=30
+                timeout=120
             )
 
             response.raise_for_status()
