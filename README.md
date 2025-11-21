@@ -2,9 +2,9 @@
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/license/apache-2-0)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
-[![Ollama](https://img.shields.io/badge/Ollama-supported-green.svg)](https://ollama.com/)
+[![Platform: Ollama](https://img.shields.io/badge/Platform-Ollama-green.svg)](https://ollama.com/)
 [![gemma3:1b](https://img.shields.io/badge/gemma3-1b-orange.svg)](https://ollama.com/library/gemma3)
-[![VOICEVOX](https://img.shields.io/badge/VOICEVOX-supported-brightgreen.svg)](https://voicevox.hiroshiba.jp/)
+[![Voice: VOICEVOX](https://img.shields.io/badge/Voice-VOICEVOX-brightgreen.svg)](https://voicevox.hiroshiba.jp/)
 
 YouTubeライブ配信でコメントに自動応答する24時間ラジオ配信システムです。
 
