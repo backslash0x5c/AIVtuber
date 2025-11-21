@@ -158,8 +158,8 @@ radio-streaming/
 │   ├── ollama_client.py     # Ollama API連携
 │   ├── voicevox_client.py   # VOICEVOX連携
 │   └── audio_streamer.py    # FFmpeg音声配信
-├── requirements.txt         # Python依存パッケージ
 ├── setup.sh                # セットアップスクリプト
+├── run.sh                  # 起動スクリプト
 ├── .env.example            # 環境変数テンプレート
 ├── .env                    # 環境変数設定（要作成）
 └── README.md               # このファイル
