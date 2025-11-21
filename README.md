@@ -40,7 +40,15 @@ sudo apt install -y ffmpeg python3 python3-pip
 curl -fsSL https://ollama.com/install.sh | sh
 
 # VOICEVOXのインストール
-# https://voicevox.hiroshiba.jp/ から最新版をダウンロード
+# https://voicevox.hiroshiba.jp/ から最新版のAppImageをダウンロード
+mkdir -p .voicevox
+# ダウンロードしたVOICEVOX.AppImageを.voicevoxディレクトリに配置
+
+# AppImageを展開
+cd .voicevox
+chmod +x VOICEVOX.AppImage
+./VOICEVOX.AppImage --appimage-extract
+cd ..
 ```
 
 ### 2. プロジェクトのセットアップ
@@ -84,8 +92,13 @@ ollama pull gemma3:1b
 #### VOICEVOXの起動
 
 ```bash
-# VOICEVOXを起動（別のターミナルで）
-./voicevox_engine/run
+# VOICEVOXをバックグラウンドで起動
+# nohup: ターミナルを閉じても処理を継続
+# &: バックグラウンドで実行
+nohup ./.voicevox/squashfs-root/vv-engine/run > voicevox.log 2>&1 &
+
+# 起動確認
+curl http://localhost:50021/version
 ```
 
 #### Ollamaの起動
