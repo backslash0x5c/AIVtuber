@@ -5,7 +5,7 @@ YouTubeライブ配信でコメントに自動応答する24時間ラジオ配�
 ## 機能
 
 - YouTubeライブチャットからコメントを取得
-- Ollama (gemma2:2b) を使用したAI応答生成
+- Ollama (gemma3:1b) を使用したAI応答生成
 - VOICEVOXによる音声合成
 - FFmpegを使用したYouTubeライブ配信
 - コメントがない時の自動雑談機能
@@ -61,14 +61,14 @@ nano .env
 - `YOUTUBE_STREAM_KEY`: YouTube配信キー
 
 オプション設定:
-- `OLLAMA_MODEL`: 使用するLLMモデル (デフォルト: gemma2:2b)
+- `OLLAMA_MODEL`: 使用するLLMモデル (デフォルト: gemma3:1b)
 - `VOICEVOX_SPEAKER_ID`: 話者ID (デフォルト: 1)
 - `IDLE_CHAT_INTERVAL`: 雑談までの待機時間（秒）
 
 ### 4. Ollamaモデルのダウンロード
 
 ```bash
-ollama pull gemma2:2b
+ollama pull gemma3:1b
 ```
 
 ## 使用方法

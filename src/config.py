@@ -15,7 +15,7 @@ class Config:
 
     # Ollama設定
     OLLAMA_URL = os.getenv('OLLAMA_URL', 'http://localhost:11434')
-    OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'gemma2:2b')
+    OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'gemma3:1b')
 
     # VOICEVOX設定
     VOICEVOX_URL = os.getenv('VOICEVOX_URL', 'http://localhost:50021')

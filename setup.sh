@@ -65,11 +65,11 @@ if ! command -v ollama &> /dev/null; then
 else
     echo "✓ Ollamaがインストールされています"
     echo ""
-    echo "gemma2:2bモデルをダウンロードしますか? (y/n)"
+    echo "gemma3:1bモデルをダウンロードしますか? (y/n)"
     read -r response
     if [[ "$response" =~ ^[Yy]$ ]]; then
         echo "モデルをダウンロード中..."
-        ollama pull gemma2:2b
+        ollama pull gemma3:1b
         echo "✓ モデルのダウンロード完了"
     fi
 fi
