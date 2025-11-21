@@ -2,6 +2,7 @@
 import subprocess
 import os
 import tempfile
+import time
 from typing import Optional
 from .config import Config
 
@@ -16,6 +17,36 @@ class AudioStreamer:
         self.image_path = "image.png"  # 配信用静止画
         self.bgm_path = "Egoist_2.mp3"  # BGM音楽ファイル
         self.bgm_volume = 0.2  # BGM音量（20%固定）
+
+    def _get_audio_duration(self, audio_path: str) -> float:
+        """
+        音声ファイルの長さを取得
+
+        Args:
+            audio_path: 音声ファイルのパス
+
+        Returns:
+            音声の長さ（秒）、取得失敗時は10.0
+        """
+        try:
+            result = subprocess.run(
+                [
+                    'ffprobe',
+                    '-v', 'error',
+                    '-show_entries', 'format=duration',
+                    '-of', 'default=noprint_wrappers=1:nokey=1',
+                    audio_path
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=5
+            )
+            if result.returncode == 0:
+                duration = float(result.stdout.decode().strip())
+                return duration
+        except Exception as e:
+            print(f"音声の長さ取得エラー: {e}")
+        return 10.0  # デフォルト値
 
     def start_stream(self):
         """
@@ -173,20 +204,26 @@ class AudioStreamer:
             with open(temp_audio, 'wb') as f:
                 f.write(audio_data)
 
+            # 音声の長さを取得
+            audio_duration = self._get_audio_duration(temp_audio)
+            print(f"音声の長さ: {audio_duration:.1f}秒")
+
             # 現在のストリームを一時停止
             print("音声再生のため一時的にストリームを切り替え中...")
             was_streaming = self.is_streaming()
             if was_streaming:
                 self.ffmpeg_process.terminate()
                 self.ffmpeg_process.wait(timeout=2)
+                # YouTube側の接続が完全に切れるまで待つ
+                time.sleep(2)
 
             # 静止画が存在するか確認
             if not os.path.exists(self.image_path):
                 # 静止画がない場合は音声のみ配信
-                success = self._play_audio_only(temp_audio)
+                success = self._play_audio_only(temp_audio, audio_duration)
             else:
                 # 静止画+音声で配信
-                success = self._play_audio_with_image(temp_audio)
+                success = self._play_audio_with_image(temp_audio, audio_duration)
 
             # 一時ファイルを削除
             if os.path.exists(temp_audio):
@@ -194,6 +231,7 @@ class AudioStreamer:
 
             # BGMストリームを再開
             if was_streaming:
+                time.sleep(1)  # 少し待ってから再開
                 self.start_stream()
 
             return success
@@ -201,13 +239,17 @@ class AudioStreamer:
         except Exception as e:
             print(f"音声再生エラー: {e}")
             # エラー時もストリームを再開
-            if self.is_streaming():
+            if was_streaming:
+                time.sleep(1)
                 self.start_stream()
             return False
 
-    def _play_audio_with_image(self, audio_path: str):
+    def _play_audio_with_image(self, audio_path: str, audio_duration: float):
         """静止画+音声+BGMを配信"""
         try:
+            # タイムアウトを音声の長さ + 20秒に設定
+            timeout_value = int(audio_duration) + 20
+
             # BGMが存在するか確認
             if not os.path.exists(self.bgm_path):
                 # BGMなしで会話音声のみ配信
@@ -226,7 +268,7 @@ class AudioStreamer:
                     '-c:a', 'aac',  # AACコーデック
                     '-b:a', '128k',  # オーディオビットレート
                     '-ar', '44100',  # サンプルレート
-                    '-shortest',  # 短い方に合わせる（音声の長さ）
+                    '-t', str(audio_duration),  # 音声の長さに合わせる
                     '-f', 'flv',  # FLV形式
                     self.stream_url
                 ]
@@ -236,13 +278,12 @@ class AudioStreamer:
                     'ffmpeg',
                     '-loop', '1',  # 静止画をループ
                     '-i', self.image_path,  # 静止画入力
-                    '-stream_loop', '-1',  # BGMをループ
-                    '-i', self.bgm_path,  # BGM入力
+                    '-i', self.bgm_path,  # BGM入力（ループなし）
                     '-i', audio_path,  # 音声入力
                     '-filter_complex',
-                    f'[1:a]volume={self.bgm_volume}[bgm];'  # BGM音量は固定
+                    f'[1:a]volume={self.bgm_volume},aloop=loop=-1:size=2e+09[bgm];'  # BGMをループ
                     f'[2:a]volume=1.0[voice];'  # 会話音声は100%
-                    f'[bgm][voice]amix=inputs=2:duration=shortest:dropout_transition=2[a]',  # ミックス
+                    f'[bgm][voice]amix=inputs=2:duration=first:dropout_transition=2[a]',  # ミックス
                     '-map', '0:v',  # ビデオは静止画
                     '-map', '[a]',  # オーディオはミックス後
                     '-c:v', 'libx264',  # H.264ビデオコーデック
@@ -255,15 +296,17 @@ class AudioStreamer:
                     '-c:a', 'aac',  # AACコーデック
                     '-b:a', '128k',  # オーディオビットレート
                     '-ar', '44100',  # サンプルレート
+                    '-t', str(audio_duration),  # 音声の長さに明示的に指定
                     '-f', 'flv',  # FLV形式
                     self.stream_url
                 ]
 
+            print(f"配信タイムアウト: {timeout_value}秒")
             process = subprocess.run(
                 ffmpeg_cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                timeout=180
+                timeout=timeout_value
             )
 
             if process.returncode != 0:
@@ -271,26 +314,28 @@ class AudioStreamer:
                 # 既に他の接続があるエラーは無視（ストリーム切り替え中の一時的なエラー）
                 if "already publishing" not in stderr.lower():
                     print(f"音声配信エラー: {stderr}")
-                return False
+                    return False
 
             return True
 
         except subprocess.TimeoutExpired:
-            print("音声配信がタイムアウトしました")
+            print(f"音声配信がタイムアウトしました（{timeout_value}秒超過）")
             return False
         except Exception as e:
             print(f"音声配信エラー: {e}")
             return False
 
-    def _play_audio_only(self, audio_path: str):
+    def _play_audio_only(self, audio_path: str, audio_duration: float):
         """音声のみを配信（静止画がない場合）"""
         try:
+            # タイムアウトを音声の長さ + 20秒に設定
+            timeout_value = int(audio_duration) + 20
+
             # BGMが存在するか確認
             if not os.path.exists(self.bgm_path):
                 # BGMなしで会話音声のみ配信
                 ffmpeg_cmd = [
                     'ffmpeg',
-                    '-re',  # リアルタイム再生
                     '-i', audio_path,  # 入力ファイル
                     '-c:a', 'aac',  # AACコーデック
                     '-b:a', '128k',  # ビットレート
@@ -301,16 +346,16 @@ class AudioStreamer:
                 # BGMと会話音声をミックス
                 ffmpeg_cmd = [
                     'ffmpeg',
-                    '-stream_loop', '-1',  # BGMをループ
                     '-i', self.bgm_path,  # BGM入力
                     '-i', audio_path,  # 音声入力
                     '-filter_complex',
-                    f'[0:a]volume={self.bgm_volume_with_voice}[bgm];'
+                    f'[0:a]volume={self.bgm_volume},aloop=loop=-1:size=2e+09[bgm];'
                     f'[1:a]volume=1.0[voice];'
-                    f'[bgm][voice]amix=inputs=2:duration=shortest:dropout_transition=2[a]',
+                    f'[bgm][voice]amix=inputs=2:duration=first:dropout_transition=2[a]',
                     '-map', '[a]',
                     '-c:a', 'aac',  # AACコーデック
                     '-b:a', '128k',  # ビットレート
+                    '-t', str(audio_duration),
                     '-f', 'flv',  # FLV形式
                     self.stream_url
                 ]
@@ -319,19 +364,19 @@ class AudioStreamer:
                 ffmpeg_cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                timeout=60
+                timeout=timeout_value
             )
 
             if process.returncode != 0:
                 stderr = process.stderr.decode()
                 if "already publishing" not in stderr.lower():
                     print(f"音声配信エラー: {stderr}")
-                return False
+                    return False
 
             return True
 
         except subprocess.TimeoutExpired:
-            print("音声配信がタイムアウトしました")
+            print(f"音声配信がタイムアウトしました（{timeout_value}秒超過）")
             return False
         except Exception as e:
             print(f"音声再生エラー: {e}")
