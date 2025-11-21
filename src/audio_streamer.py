@@ -15,8 +15,7 @@ class AudioStreamer:
         self.temp_dir = tempfile.mkdtemp()
         self.image_path = "image.png"  # 配信用静止画
         self.bgm_path = "Egoist_2.mp3"  # BGM音楽ファイル
-        self.bgm_volume = 0.3  # BGMのみの時の音量（30%）
-        self.bgm_volume_with_voice = 0.15  # 会話中のBGM音量（15%）
+        self.bgm_volume = 0.2  # BGM音量（20%固定）
 
     def start_stream(self):
         """
@@ -241,7 +240,7 @@ class AudioStreamer:
                     '-i', self.bgm_path,  # BGM入力
                     '-i', audio_path,  # 音声入力
                     '-filter_complex',
-                    f'[1:a]volume={self.bgm_volume_with_voice}[bgm];'  # BGM音量を下げる
+                    f'[1:a]volume={self.bgm_volume}[bgm];'  # BGM音量は固定
                     f'[2:a]volume=1.0[voice];'  # 会話音声は100%
                     f'[bgm][voice]amix=inputs=2:duration=shortest:dropout_transition=2[a]',  # ミックス
                     '-map', '0:v',  # ビデオは静止画
@@ -264,7 +263,7 @@ class AudioStreamer:
                 ffmpeg_cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                timeout=60
+                timeout=180
             )
 
             if process.returncode != 0:
