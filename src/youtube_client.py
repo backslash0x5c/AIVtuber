@@ -36,6 +36,9 @@ class YouTubeClient:
 
         Returns:
             コメントのリスト [{"author": "ユーザー名", "message": "コメント内容"}, ...]
+
+        Raises:
+            Exception: チャット接続エラー時
         """
         if not self.is_connected or not self.chat:
             return []
@@ -50,8 +53,11 @@ class YouTubeClient:
                         "message": c.message
                     })
         except Exception as e:
-            print(f"コメント取得エラー: {e}")
+            error_msg = str(e)
+            print(f"コメント取得エラー: {error_msg}")
             self.is_connected = False
+            # エラーを再raiseして上位で処理できるようにする
+            raise
 
         return comments
 

@@ -63,7 +63,7 @@ class RadioStreamingBot:
             return False
 
         # Ollama確認
-        print("\n[3/3] Ollama接続確認中...")
+        print("\n[3/4] Ollama接続確認中...")
         try:
             # テストメッセージで確認
             test_response = self.ollama_client.generate_response("こんにちは", is_idle_chat=False)
@@ -75,6 +75,13 @@ class RadioStreamingBot:
         except Exception as e:
             print(f"エラー: Ollama接続失敗 - {e}")
             return False
+
+        # ストリーミング配信開始
+        print("\n[4/4] YouTube配信を開始中...")
+        if not self.audio_streamer.start_stream():
+            print("エラー: ストリーミング配信の開始に失敗しました")
+            return False
+        print("✓ YouTube配信開始成功")
 
         print("\n" + "=" * 50)
         print("初期化完了！配信を開始します...")
@@ -149,14 +156,29 @@ class RadioStreamingBot:
             while self.running:
                 # YouTubeチャットの状態確認
                 if not self.youtube_client.is_alive():
-                    print("⚠️ YouTubeチャット接続が切断されました。再接続中...")
-                    if not self.youtube_client.reconnect():
-                        print("❌ 再接続に失敗しました。30秒後に再試行します。")
-                        time.sleep(30)
-                        continue
+                    print("\n" + "=" * 50)
+                    print("⚠️ YouTubeチャット接続が切断されました")
+                    print("プログラムを終了します...")
+                    print("=" * 50 + "\n")
+                    break
 
                 # 新しいコメントを取得
-                comments = self.youtube_client.get_new_comments()
+                try:
+                    comments = self.youtube_client.get_new_comments()
+                except Exception as e:
+                    error_msg = str(e)
+                    # pytchatのエラーメッセージを検出
+                    if "Request interrupted" in error_msg or "切断" in error_msg:
+                        print("\n" + "=" * 50)
+                        print("⚠️ YouTubeチャット接続が切断されました")
+                        print(f"エラー: {error_msg}")
+                        print("プログラムを終了します...")
+                        print("=" * 50 + "\n")
+                        break
+                    else:
+                        print(f"⚠️ コメント取得エラー: {e}")
+                        time.sleep(Config.COMMENT_CHECK_INTERVAL)
+                        continue
 
                 if comments:
                     # コメントがある場合は処理
