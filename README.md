@@ -1,5 +1,9 @@
 # 24時間ラジオ対話配信システム
 
+![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)
+![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
+![Platform](https://img.shields.io/badge/platform-linux-lightgrey.svg)
+
 YouTubeライブ配信でコメントに自動応答する24時間ラジオ配信システムです。
 
 ## 機能
@@ -208,10 +212,3 @@ VOICEVOX_SPEAKER_ID=3  # 話者IDを変更
 ## ライセンス
 
 このプロジェクトはApache License 2.0の下で公開されています。詳細は[LICENSE](LICENSE)ファイルを参照してください。
-
-## 注意事項
-
-- 24時間配信を行う場合は、サーバーの安定性とネットワーク接続を確認してください
-- YouTube配信にはYouTubeの利用規約を遵守してください
-- LLMの応答内容には責任を持ってください
-- VOICEVOXの利用規約を確認してください
