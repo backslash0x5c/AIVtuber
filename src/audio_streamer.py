@@ -14,12 +14,15 @@ class AudioStreamer:
         self.ffmpeg_process: Optional[subprocess.Popen] = None
         self.temp_dir = tempfile.mkdtemp()
         self.image_path = "image.png"  # 配信用静止画
+        self.bgm_path = "Egoist_2.mp3"  # BGM音楽ファイル
+        self.bgm_volume = 0.3  # BGMのみの時の音量（30%）
+        self.bgm_volume_with_voice = 0.15  # 会話中のBGM音量（15%）
 
     def start_stream(self):
         """
         YouTubeへのストリーミングを開始
 
-        静止画と無音のストリームを開始
+        静止画とBGMのストリームを開始
         """
         try:
             # 静止画が存在するか確認
@@ -28,7 +31,53 @@ class AudioStreamer:
                 print("静止画なしで音声のみ配信します")
                 return self._start_audio_only_stream()
 
-            # 静止画 + 無音のストリームを生成してYouTubeに配信
+            # BGMが存在するか確認
+            if not os.path.exists(self.bgm_path):
+                print(f"警告: {self.bgm_path} が見つかりません")
+                print("BGMなしで配信します")
+                return self._start_stream_without_bgm()
+
+            # 静止画 + BGMのストリームを生成してYouTubeに配信
+            ffmpeg_cmd = [
+                'ffmpeg',
+                '-loop', '1',  # 静止画をループ
+                '-i', self.image_path,  # 静止画入力
+                '-stream_loop', '-1',  # BGMを無限ループ
+                '-i', self.bgm_path,  # BGM入力
+                '-filter_complex', f'[1:a]volume={self.bgm_volume}[a]',  # BGM音量調整
+                '-map', '0:v',  # ビデオは静止画から
+                '-map', '[a]',  # オーディオはフィルター処理後のBGM
+                '-c:v', 'libx264',  # H.264ビデオコーデック
+                '-preset', 'veryfast',  # エンコード速度優先
+                '-b:v', '2500k',  # ビデオビットレート
+                '-maxrate', '2500k',
+                '-bufsize', '5000k',
+                '-pix_fmt', 'yuv420p',  # ピクセルフォーマット
+                '-g', '50',  # GOP size
+                '-c:a', 'aac',  # AACコーデック
+                '-b:a', '128k',  # オーディオビットレート
+                '-ar', '44100',  # サンプルレート
+                '-f', 'flv',  # FLV形式
+                self.stream_url
+            ]
+
+            self.ffmpeg_process = subprocess.Popen(
+                ffmpeg_cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+
+            print("YouTubeストリーミング配信を開始しました（静止画+BGM）")
+            return True
+
+        except Exception as e:
+            print(f"ストリーミング開始エラー: {e}")
+            return False
+
+    def _start_stream_without_bgm(self):
+        """BGMなしでストリームを開始（フォールバック）"""
+        try:
             ffmpeg_cmd = [
                 'ffmpeg',
                 '-loop', '1',  # 静止画をループ
@@ -56,7 +105,7 @@ class AudioStreamer:
                 stderr=subprocess.PIPE
             )
 
-            print("YouTubeストリーミング配信を開始しました（静止画+音声）")
+            print("YouTubeストリーミング配信を開始しました（静止画のみ）")
             return True
 
         except Exception as e:
@@ -66,16 +115,35 @@ class AudioStreamer:
     def _start_audio_only_stream(self):
         """音声のみのストリーム（静止画がない場合）"""
         try:
-            ffmpeg_cmd = [
-                'ffmpeg',
-                '-re',  # リアルタイム配信
-                '-f', 'lavfi',
-                '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',  # 無音のオーディオソース
-                '-c:a', 'aac',  # AACコーデック
-                '-b:a', '128k',  # ビットレート
-                '-f', 'flv',  # FLV形式
-                self.stream_url
-            ]
+            # BGMが存在するか確認
+            if not os.path.exists(self.bgm_path):
+                print(f"警告: {self.bgm_path} が見つかりません")
+                print("BGMなしで配信します")
+                # BGMなしで無音配信
+                ffmpeg_cmd = [
+                    'ffmpeg',
+                    '-re',  # リアルタイム配信
+                    '-f', 'lavfi',
+                    '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',  # 無音のオーディオソース
+                    '-c:a', 'aac',  # AACコーデック
+                    '-b:a', '128k',  # ビットレート
+                    '-f', 'flv',  # FLV形式
+                    self.stream_url
+                ]
+            else:
+                # BGMありで配信
+                ffmpeg_cmd = [
+                    'ffmpeg',
+                    '-stream_loop', '-1',  # BGMを無限ループ
+                    '-i', self.bgm_path,  # BGM入力
+                    '-filter_complex', f'[0:a]volume={self.bgm_volume}[a]',  # BGM音量調整
+                    '-map', '[a]',
+                    '-c:a', 'aac',  # AACコーデック
+                    '-b:a', '128k',  # ビットレート
+                    '-ar', '44100',  # サンプルレート
+                    '-f', 'flv',  # FLV形式
+                    self.stream_url
+                ]
 
             self.ffmpeg_process = subprocess.Popen(
                 ffmpeg_cmd,
@@ -95,7 +163,7 @@ class AudioStreamer:
         """
         音声データを再生してストリーミング配信
 
-        一時的にストリームを停止し、音声付きで再開してから、再び無音ストリームに戻す
+        一時的にストリームを停止し、音声付きで再開してから、再びBGMストリームに戻す
 
         Args:
             audio_data: WAV形式の音声データ
@@ -125,7 +193,7 @@ class AudioStreamer:
             if os.path.exists(temp_audio):
                 os.remove(temp_audio)
 
-            # 無音ストリームを再開
+            # BGMストリームを再開
             if was_streaming:
                 self.start_stream()
 
@@ -139,28 +207,58 @@ class AudioStreamer:
             return False
 
     def _play_audio_with_image(self, audio_path: str):
-        """静止画+音声を配信"""
+        """静止画+音声+BGMを配信"""
         try:
-            # FFmpegで静止画+音声をYouTubeに配信
-            ffmpeg_cmd = [
-                'ffmpeg',
-                '-loop', '1',  # 静止画をループ
-                '-i', self.image_path,  # 静止画入力
-                '-i', audio_path,  # 音声入力
-                '-c:v', 'libx264',  # H.264ビデオコーデック
-                '-preset', 'veryfast',  # エンコード速度優先
-                '-b:v', '2500k',  # ビデオビットレート
-                '-maxrate', '2500k',
-                '-bufsize', '5000k',
-                '-pix_fmt', 'yuv420p',  # ピクセルフォーマット
-                '-g', '50',  # GOP size
-                '-c:a', 'aac',  # AACコーデック
-                '-b:a', '128k',  # オーディオビットレート
-                '-ar', '44100',  # サンプルレート
-                '-shortest',  # 短い方に合わせる（音声の長さ）
-                '-f', 'flv',  # FLV形式
-                self.stream_url
-            ]
+            # BGMが存在するか確認
+            if not os.path.exists(self.bgm_path):
+                # BGMなしで会話音声のみ配信
+                ffmpeg_cmd = [
+                    'ffmpeg',
+                    '-loop', '1',  # 静止画をループ
+                    '-i', self.image_path,  # 静止画入力
+                    '-i', audio_path,  # 音声入力
+                    '-c:v', 'libx264',  # H.264ビデオコーデック
+                    '-preset', 'veryfast',  # エンコード速度優先
+                    '-b:v', '2500k',  # ビデオビットレート
+                    '-maxrate', '2500k',
+                    '-bufsize', '5000k',
+                    '-pix_fmt', 'yuv420p',  # ピクセルフォーマット
+                    '-g', '50',  # GOP size
+                    '-c:a', 'aac',  # AACコーデック
+                    '-b:a', '128k',  # オーディオビットレート
+                    '-ar', '44100',  # サンプルレート
+                    '-shortest',  # 短い方に合わせる（音声の長さ）
+                    '-f', 'flv',  # FLV形式
+                    self.stream_url
+                ]
+            else:
+                # BGMと会話音声をミックスして配信
+                ffmpeg_cmd = [
+                    'ffmpeg',
+                    '-loop', '1',  # 静止画をループ
+                    '-i', self.image_path,  # 静止画入力
+                    '-stream_loop', '-1',  # BGMをループ
+                    '-i', self.bgm_path,  # BGM入力
+                    '-i', audio_path,  # 音声入力
+                    '-filter_complex',
+                    f'[1:a]volume={self.bgm_volume_with_voice}[bgm];'  # BGM音量を下げる
+                    f'[2:a]volume=1.0[voice];'  # 会話音声は100%
+                    f'[bgm][voice]amix=inputs=2:duration=shortest:dropout_transition=2[a]',  # ミックス
+                    '-map', '0:v',  # ビデオは静止画
+                    '-map', '[a]',  # オーディオはミックス後
+                    '-c:v', 'libx264',  # H.264ビデオコーデック
+                    '-preset', 'veryfast',  # エンコード速度優先
+                    '-b:v', '2500k',  # ビデオビットレート
+                    '-maxrate', '2500k',
+                    '-bufsize', '5000k',
+                    '-pix_fmt', 'yuv420p',  # ピクセルフォーマット
+                    '-g', '50',  # GOP size
+                    '-c:a', 'aac',  # AACコーデック
+                    '-b:a', '128k',  # オーディオビットレート
+                    '-ar', '44100',  # サンプルレート
+                    '-f', 'flv',  # FLV形式
+                    self.stream_url
+                ]
 
             process = subprocess.run(
                 ffmpeg_cmd,
@@ -188,15 +286,35 @@ class AudioStreamer:
     def _play_audio_only(self, audio_path: str):
         """音声のみを配信（静止画がない場合）"""
         try:
-            ffmpeg_cmd = [
-                'ffmpeg',
-                '-re',  # リアルタイム再生
-                '-i', audio_path,  # 入力ファイル
-                '-c:a', 'aac',  # AACコーデック
-                '-b:a', '128k',  # ビットレート
-                '-f', 'flv',  # FLV形式
-                self.stream_url
-            ]
+            # BGMが存在するか確認
+            if not os.path.exists(self.bgm_path):
+                # BGMなしで会話音声のみ配信
+                ffmpeg_cmd = [
+                    'ffmpeg',
+                    '-re',  # リアルタイム再生
+                    '-i', audio_path,  # 入力ファイル
+                    '-c:a', 'aac',  # AACコーデック
+                    '-b:a', '128k',  # ビットレート
+                    '-f', 'flv',  # FLV形式
+                    self.stream_url
+                ]
+            else:
+                # BGMと会話音声をミックス
+                ffmpeg_cmd = [
+                    'ffmpeg',
+                    '-stream_loop', '-1',  # BGMをループ
+                    '-i', self.bgm_path,  # BGM入力
+                    '-i', audio_path,  # 音声入力
+                    '-filter_complex',
+                    f'[0:a]volume={self.bgm_volume_with_voice}[bgm];'
+                    f'[1:a]volume=1.0[voice];'
+                    f'[bgm][voice]amix=inputs=2:duration=shortest:dropout_transition=2[a]',
+                    '-map', '[a]',
+                    '-c:a', 'aac',  # AACコーデック
+                    '-b:a', '128k',  # ビットレート
+                    '-f', 'flv',  # FLV形式
+                    self.stream_url
+                ]
 
             process = subprocess.run(
                 ffmpeg_cmd,
