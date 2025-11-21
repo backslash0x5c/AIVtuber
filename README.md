@@ -13,7 +13,7 @@ YouTubeライブ配信でコメントに自動応答する24時間ラジオ配�
 - YouTubeライブチャットからコメントを取得
 - Ollama (gemma3:1b) を使用したAI応答生成
 - VOICEVOXによる音声合成
-- FFmpegを使用したYouTubeライブ配信
+- 静止画 + 音声でYouTubeライブ配信
 - コメントがない時の自動雑談機能
 - 会話履歴を保持して文脈に沿った対話
 
@@ -89,6 +89,16 @@ nano .env
 ollama pull gemma3:1b
 ```
 
+### 5. 配信用静止画の準備
+
+```bash
+# プロジェクトルートにimage.pngを配置
+# 推奨サイズ: 1280x720 または 1920x1080
+cp /path/to/your/image.png ./image.png
+```
+
+静止画がない場合は音声のみで配信されます。
+
 ## 使用方法
 
 ### 1. 必要なサービスを起動
@@ -119,7 +129,7 @@ ollama serve
 source venv/bin/activate
 
 # プログラムを起動
-python3 -m src.main
+./run.sh
 ```
 
 ### 3. 停止方法
@@ -157,11 +167,12 @@ radio-streaming/
 │   ├── youtube_client.py    # YouTubeコメント取得
 │   ├── ollama_client.py     # Ollama API連携
 │   ├── voicevox_client.py   # VOICEVOX連携
-│   └── audio_streamer.py    # FFmpeg音声配信
+│   └── audio_streamer.py    # FFmpeg配信（静止画+音声）
 ├── setup.sh                # セットアップスクリプト
 ├── run.sh                  # 起動スクリプト
 ├── .env.example            # 環境変数テンプレート
 ├── .env                    # 環境変数設定（要作成）
+├── image.png               # 配信用静止画（要配置）
 └── README.md               # このファイル
 ```
 

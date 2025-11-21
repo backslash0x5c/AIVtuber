@@ -50,6 +50,9 @@ tmp/
 *.mp3
 *.flac
 
+# 配信用画像
+image.png
+
 # VOICEVOX
 voicevox/
 squashfs-root/
