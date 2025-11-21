@@ -36,11 +36,22 @@ else
     echo "✓ FFmpeg: $(ffmpeg -version | head -n1)"
 fi
 
-# Python依存パッケージのインストール
+# 仮想環境のチェック
 echo ""
-echo "[4/6] Python依存パッケージのインストール..."
-pip3 install -r requirements.txt
-echo "✓ 依存パッケージのインストール完了"
+echo "[4/6] 仮想環境の確認..."
+if [ -z "$VIRTUAL_ENV" ]; then
+    echo "警告: 仮想環境が有効になっていません"
+    echo "仮想環境を有効化してください:"
+    echo "  source venv/bin/activate"
+    echo ""
+    echo "Python依存パッケージをスキップします"
+else
+    echo "✓ 仮想環境が有効です: $VIRTUAL_ENV"
+    echo ""
+    echo "Python依存パッケージのインストール..."
+    pip install pytchat requests python-dotenv pydub
+    echo "✓ 依存パッケージのインストール完了"
+fi
 
 # .envファイルの作成
 echo ""

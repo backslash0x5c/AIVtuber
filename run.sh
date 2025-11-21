@@ -5,6 +5,14 @@ echo "24時間ラジオ対話配信システム - 起動"
 echo "=================================================="
 echo ""
 
+# 仮想環境のチェック
+if [ -z "$VIRTUAL_ENV" ]; then
+    echo "警告: 仮想環境が有効になっていません"
+    echo "仮想環境を有効化してください:"
+    echo "  source venv/bin/activate"
+    exit 1
+fi
+
 # エラーチェック
 if [ ! -f .env ]; then
     echo "エラー: .envファイルが見つかりません"

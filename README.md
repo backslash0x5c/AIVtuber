@@ -55,6 +55,13 @@ chmod +x ./voicevox/VOICEVOX.AppImage
 git clone <repository-url>
 cd radio-streaming
 
+# 仮想環境の作成と有効化
+python3 -m venv venv
+source venv/bin/activate
+
+# Python依存パッケージのインストール
+pip install pytchat requests python-dotenv pydub
+
 # セットアップスクリプトを実行
 ./setup.sh
 ```
@@ -108,6 +115,10 @@ ollama serve
 ### 2. ラジオ配信システムの起動
 
 ```bash
+# 仮想環境を有効化
+source venv/bin/activate
+
+# プログラムを起動
 python3 -m src.main
 ```
 

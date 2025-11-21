@@ -20,6 +20,11 @@ wheels/
 .installed.cfg
 *.egg
 
+# 仮想環境
+venv/
+env/
+ENV/
+
 # 環境変数
 .env
 
@@ -44,3 +49,7 @@ tmp/
 *.wav
 *.mp3
 *.flac
+
+# VOICEVOX
+voicevox/
+squashfs-root/
