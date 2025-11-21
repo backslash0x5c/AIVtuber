@@ -207,7 +207,7 @@ VOICEVOX_SPEAKER_ID=3  # 話者IDを変更
 
 ## ライセンス
 
-このプロジェクトはMITライセンスの下で公開されています。
+このプロジェクトはApache License 2.0の下で公開されています。詳細は[LICENSE](LICENSE)ファイルを参照してください。
 
 ## 注意事項
 
