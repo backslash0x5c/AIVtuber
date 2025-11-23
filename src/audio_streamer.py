@@ -234,14 +234,31 @@ class AudioStreamer:
                         # WAVファイルから実際のオーディオデータを抽出
                         voice_samples = self._extract_wav_samples(audio_data)
 
-                        # 音声の長さ分のBGMチャンクを取得
-                        voice_duration = len(voice_samples) / (self.sample_rate * self.channels)
-                        bgm_chunk = self._get_bgm_chunk(voice_duration)
+                        # 音声をチャンク単位でリアルタイムに書き込み
+                        chunk_size = int(self.sample_rate * self.channels * chunk_duration)
+                        total_samples = len(voice_samples)
+                        offset = 0
 
-                        # BGMと音声をミックス
-                        mixed_data = self._mix_audio(bgm_chunk, voice_samples)
-                        fifo.write(mixed_data)
-                        fifo.flush()
+                        while offset < total_samples:
+                            # チャンクサイズ分の音声を取得
+                            end = min(offset + chunk_size, total_samples)
+                            voice_chunk = voice_samples[offset:end]
+
+                            # 実際のチャンク長を計算
+                            actual_duration = len(voice_chunk) / (self.sample_rate * self.channels)
+
+                            # BGMチャンクを取得
+                            bgm_chunk = self._get_bgm_chunk(actual_duration)
+
+                            # BGMと音声をミックス
+                            mixed_data = self._mix_audio(bgm_chunk, voice_chunk)
+                            fifo.write(mixed_data)
+                            fifo.flush()
+
+                            # リアルタイム再生のため、チャンクの長さ分だけ待機
+                            time.sleep(actual_duration)
+
+                            offset = end
 
                         print("音声データ書き込み完了")
 
@@ -406,8 +423,9 @@ class AudioStreamer:
         音声データを再生してストリーミング配信
 
         連続ストリーミング方式：
-        - 音声データをキューに追加するだけ
+        - 音声データをキューに追加
         - フィーダースレッドが自動的にBGMとミックスしてFIFOに書き込む
+        - 音声の再生が完了するまで待機
         - ストリームの切り替えなし
 
         Args:
@@ -418,14 +436,24 @@ class AudioStreamer:
                 print("警告: ストリーミングが開始されていません")
                 return False
 
+            # 音声の長さを計算
+            voice_samples = self._extract_wav_samples(audio_data)
+            audio_duration = len(voice_samples) / (self.sample_rate * self.channels)
+            print(f"音声の長さ: {audio_duration:.1f}秒")
+
             print("音声データをキューに追加中...")
             self.audio_queue.put(audio_data)
             print("音声データをキューに追加しました（切り替えなし、BGMとミックス）")
+
+            # 音声が完全に再生されるまで待機（少し余裕を持たせる）
+            time.sleep(audio_duration + 0.5)
 
             return True
 
         except Exception as e:
             print(f"音声キュー追加エラー: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     def stop_stream(self):
