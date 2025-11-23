@@ -113,7 +113,28 @@ class RadioStreamingBot:
     def generate_idle_chat(self):
         """雑談を生成して配信"""
         print("\n💭 雑談を生成中...")
-        chat_text = self.ollama_client.generate_idle_chat()
+
+        # 空白や改行のみの応答を回避するため、最大3回再試行
+        max_retries = 3
+        chat_text = ""
+
+        for attempt in range(max_retries):
+            chat_text = self.ollama_client.generate_idle_chat()
+
+            # 空白や改行のみでないかチェック
+            if chat_text.strip():
+                # 有効なテキストが生成された
+                break
+            else:
+                print(f"⚠️ 空白のみの応答が生成されました（試行 {attempt + 1}/{max_retries}）")
+                if attempt < max_retries - 1:
+                    print("再試行中...")
+
+        # それでも空の場合はデフォルトメッセージ
+        if not chat_text.strip():
+            chat_text = "みなさん、こんにちは。今日も配信を聞いてくださってありがとうございます。"
+            print(f"⚠️ デフォルトメッセージを使用します")
+
         print(f"📝 雑談: {chat_text}")
 
         # 音声合成
