@@ -41,57 +41,6 @@ class AudioStreamer:
         self.channels = 2
         self.sample_width = 2  # 16-bit
 
-        # BGMデータ
-        self.bgm_samples: Optional[np.ndarray] = None
-        self.bgm_position = 0
-
-    def _load_bgm(self) -> bool:
-        """BGMファイルをロードしてPCMサンプルとして保持"""
-        try:
-            if not os.path.exists(self.bgm_path):
-                print(f"警告: {self.bgm_path} が見つかりません")
-                print("BGMなしで配信します")
-                return False
-
-            # FFmpegでBGMをWAVに変換して読み込み
-            temp_wav = os.path.join(self.temp_dir, 'bgm_temp.wav')
-            convert_cmd = [
-                'ffmpeg',
-                '-i', self.bgm_path,
-                '-ar', str(self.sample_rate),
-                '-ac', str(self.channels),
-                '-sample_fmt', 's16',
-                '-y',
-                temp_wav
-            ]
-
-            result = subprocess.run(
-                convert_cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=30
-            )
-
-            if result.returncode != 0:
-                print(f"BGM変換エラー: {result.stderr.decode()}")
-                return False
-
-            # WAVファイルを読み込み
-            with wave.open(temp_wav, 'rb') as wav:
-                frames = wav.readframes(wav.getnframes())
-                # int16の配列として読み込む
-                self.bgm_samples = np.frombuffer(frames, dtype=np.int16)
-
-            # 一時ファイルを削除
-            os.remove(temp_wav)
-
-            print(f"BGMロード完了: {len(self.bgm_samples)} samples")
-            return True
-
-        except Exception as e:
-            print(f"BGMロードエラー: {e}")
-            return False
-
     def _create_audio_fifo(self):
         """名前付きパイプ（FIFO）を作成"""
         try:
@@ -117,72 +66,6 @@ class AudioStreamer:
         silence = np.zeros(num_samples, dtype=np.int16)
         return silence.tobytes()
 
-    def _get_bgm_chunk(self, duration_seconds: float) -> np.ndarray:
-        """BGMから指定秒数分のチャンクを取得（ループ対応）
-
-        Args:
-            duration_seconds: 取得する長さ（秒）
-
-        Returns:
-            BGMのPCMサンプル（int16のnumpy配列）
-        """
-        if self.bgm_samples is None:
-            # BGMがない場合は無音を返す
-            num_samples = int(self.sample_rate * duration_seconds * self.channels)
-            return np.zeros(num_samples, dtype=np.int16)
-
-        num_samples = int(self.sample_rate * duration_seconds * self.channels)
-        chunk = np.zeros(num_samples, dtype=np.int16)
-
-        samples_remaining = num_samples
-        offset = 0
-
-        while samples_remaining > 0:
-            # BGMの残りサンプル数
-            bgm_remaining = len(self.bgm_samples) - self.bgm_position
-
-            # コピーするサンプル数
-            to_copy = min(samples_remaining, bgm_remaining)
-
-            # チャンクにコピー
-            chunk[offset:offset + to_copy] = self.bgm_samples[self.bgm_position:self.bgm_position + to_copy]
-
-            # 位置を更新
-            self.bgm_position += to_copy
-            offset += to_copy
-            samples_remaining -= to_copy
-
-            # BGMの終わりに達したらループ
-            if self.bgm_position >= len(self.bgm_samples):
-                self.bgm_position = 0
-
-        # BGM音量を適用
-        chunk = (chunk * self.bgm_volume).astype(np.int16)
-        return chunk
-
-    def _mix_audio(self, bgm_chunk: np.ndarray, voice_samples: np.ndarray) -> bytes:
-        """BGMと音声をミックス
-
-        Args:
-            bgm_chunk: BGMのPCMサンプル
-            voice_samples: 音声のPCMサンプル
-
-        Returns:
-            ミックス後のPCMデータ
-        """
-        # 長さを揃える（短い方に合わせる）
-        min_len = min(len(bgm_chunk), len(voice_samples))
-        bgm_chunk = bgm_chunk[:min_len]
-        voice_samples = voice_samples[:min_len]
-
-        # int32でミックス（オーバーフロー防止）
-        mixed = bgm_chunk.astype(np.int32) + voice_samples.astype(np.int32)
-
-        # クリッピング
-        mixed = np.clip(mixed, -32768, 32767)
-
-        return mixed.astype(np.int16).tobytes()
-
     def _extract_wav_samples(self, wav_data: bytes) -> np.ndarray:
         """WAVファイルからサンプルデータを抽出
 
@@ -206,8 +89,9 @@ class AudioStreamer:
         """オーディオフィーダースレッド
 
         音声キューを監視し、FIFOに連続的にデータを書き込む：
-        - キューが空の場合：BGMチャンクを書き込み
-        - キューにデータがある場合：BGMと音声をミックスして書き込み
+        - キューが空の場合：無音を書き込み（BGMはFFmpegで直接ミックス）
+        - キューにデータがある場合：音声データを書き込み
+        - FFmpegのペースで読み取られるため、sleepなし
         """
         print("オーディオフィーダースレッド開始")
 
@@ -219,6 +103,7 @@ class AudioStreamer:
                 self._write_wav_header(fifo, data_size=0xFFFFFFFF)
 
                 chunk_duration = 0.1  # 100msチャンク
+                silence_chunk = self._generate_silence(chunk_duration)
 
                 while self.is_running:
                     try:
@@ -234,38 +119,16 @@ class AudioStreamer:
                         # WAVファイルから実際のオーディオデータを抽出
                         voice_samples = self._extract_wav_samples(audio_data)
 
-                        # 音声をチャンク単位でリアルタイムに書き込み
-                        chunk_size = int(self.sample_rate * self.channels * chunk_duration)
-                        total_samples = len(voice_samples)
-                        offset = 0
-
-                        while offset < total_samples:
-                            # チャンクサイズ分の音声を取得
-                            end = min(offset + chunk_size, total_samples)
-                            voice_chunk = voice_samples[offset:end]
-
-                            # 実際のチャンク長を計算
-                            actual_duration = len(voice_chunk) / (self.sample_rate * self.channels)
-
-                            # BGMチャンクを取得
-                            bgm_chunk = self._get_bgm_chunk(actual_duration)
-
-                            # BGMと音声をミックス
-                            mixed_data = self._mix_audio(bgm_chunk, voice_chunk)
-                            fifo.write(mixed_data)
-                            fifo.flush()
-
-                            # リアルタイム再生のため、チャンクの長さ分だけ待機
-                            time.sleep(actual_duration)
-
-                            offset = end
+                        # 音声データを直接書き込み（FFmpegがペースを制御）
+                        fifo.write(voice_samples.tobytes())
+                        fifo.flush()
 
                         print("音声データ書き込み完了")
 
                     except queue.Empty:
-                        # キューが空の場合はBGMのみを書き込み
-                        bgm_chunk = self._get_bgm_chunk(chunk_duration)
-                        fifo.write(bgm_chunk.tobytes())
+                        # キューが空の場合は無音を書き込み
+                        # FFmpegがBGMとミックスするため、ここでは無音のみ
+                        fifo.write(silence_chunk)
                         fifo.flush()
 
         except Exception as e:
@@ -307,11 +170,10 @@ class AudioStreamer:
         """
         YouTubeへのストリーミングを開始
 
-        連続ストリーミング方式：
-        1. BGMをロード
-        2. FIFOパイプを作成
-        3. オーディオフィーダースレッドを起動
-        4. FFmpegをFIFOから読み取るように起動
+        連続ストリーミング方式（BGM + マイク入力方式）：
+        1. FIFOパイプを作成
+        2. オーディオフィーダースレッドを起動
+        3. FFmpegでBGMとFIFO（合成音声）をamixでミックス
         """
         try:
             # 静止画が存在するか確認
@@ -319,9 +181,6 @@ class AudioStreamer:
                 print(f"警告: {self.image_path} が見つかりません")
                 print("静止画なしで音声のみ配信します")
                 return self._start_audio_only_stream()
-
-            # BGMをロード
-            self._load_bgm()
 
             # FIFOパイプを作成
             if not self._create_audio_fifo():
@@ -332,7 +191,61 @@ class AudioStreamer:
             self.feeder_thread = threading.Thread(target=self._audio_feeder, daemon=True)
             self.feeder_thread.start()
 
-            # FFmpegをFIFOから読み取るように起動
+            # BGMが存在するか確認
+            if not os.path.exists(self.bgm_path):
+                print(f"警告: {self.bgm_path} が見つかりません")
+                print("BGMなしで配信します")
+                return self._start_stream_without_bgm()
+
+            # FFmpegでBGMとFIFO（合成音声）をamixでミックス
+            ffmpeg_cmd = [
+                'ffmpeg',
+                '-loop', '1',  # 静止画をループ
+                '-i', self.image_path,  # 入力0: 静止画
+                '-stream_loop', '-1',  # BGMを無限ループ
+                '-i', self.bgm_path,  # 入力1: BGM
+                '-f', 'wav',  # WAV形式で読み取り
+                '-i', self.audio_fifo_path,  # 入力2: FIFOパイプから音声入力
+                '-filter_complex',
+                f'[1:a]volume={self.bgm_volume}[bgm];'  # BGM音量調整
+                f'[2:a]volume=1.0[voice];'  # 音声は100%
+                f'[bgm][voice]amix=inputs=2:duration=longest:dropout_transition=0[a]',  # ミックス
+                '-map', '0:v',  # ビデオは静止画
+                '-map', '[a]',  # オーディオはミックス後
+                '-c:v', 'libx264',  # H.264ビデオコーデック
+                '-preset', 'veryfast',  # エンコード速度優先
+                '-b:v', '2500k',  # ビデオビットレート
+                '-maxrate', '2500k',
+                '-bufsize', '5000k',
+                '-pix_fmt', 'yuv420p',  # ピクセルフォーマット
+                '-g', '50',  # GOP size
+                '-c:a', 'aac',  # AACコーデック
+                '-b:a', '128k',  # オーディオビットレート
+                '-ar', '44100',  # サンプルレート
+                '-f', 'flv',  # FLV形式
+                self.stream_url
+            ]
+
+            self.ffmpeg_process = subprocess.Popen(
+                ffmpeg_cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+
+            print("YouTubeストリーミング配信を開始しました（BGM + マイク入力方式）")
+            return True
+
+        except Exception as e:
+            print(f"ストリーミング開始エラー: {e}")
+            import traceback
+            traceback.print_exc()
+            self.is_running = False
+            return False
+
+    def _start_stream_without_bgm(self):
+        """BGMなしでストリームを開始（フォールバック）"""
+        try:
             ffmpeg_cmd = [
                 'ffmpeg',
                 '-loop', '1',  # 静止画をループ
@@ -360,26 +273,22 @@ class AudioStreamer:
                 stderr=subprocess.PIPE
             )
 
-            print("YouTubeストリーミング配信を開始しました（連続ストリーミングモード + BGM）")
+            print("YouTubeストリーミング配信を開始しました（BGMなし）")
             return True
 
         except Exception as e:
             print(f"ストリーミング開始エラー: {e}")
             import traceback
             traceback.print_exc()
-            self.is_running = False
             return False
 
     def _start_audio_only_stream(self):
         """音声のみのストリーム（静止画がない場合）
 
-        連続ストリーミング方式：
-        FIFOパイプから音声を読み取る
+        連続ストリーミング方式（BGM + マイク入力方式）：
+        FIFOパイプから音声を読み取り、BGMとミックス
         """
         try:
-            # BGMをロード
-            self._load_bgm()
-
             # FIFOパイプを作成
             if not self._create_audio_fifo():
                 return False
@@ -389,17 +298,38 @@ class AudioStreamer:
             self.feeder_thread = threading.Thread(target=self._audio_feeder, daemon=True)
             self.feeder_thread.start()
 
-            # FFmpegをFIFOから読み取るように起動（音声のみ）
-            ffmpeg_cmd = [
-                'ffmpeg',
-                '-f', 'wav',  # WAV形式で読み取り
-                '-i', self.audio_fifo_path,  # FIFOパイプから音声入力
-                '-c:a', 'aac',  # AACコーデック
-                '-b:a', '128k',  # ビットレート
-                '-ar', '44100',  # サンプルレート
-                '-f', 'flv',  # FLV形式
-                self.stream_url
-            ]
+            # BGMが存在するか確認
+            if os.path.exists(self.bgm_path):
+                # BGMあり：amixでミックス
+                ffmpeg_cmd = [
+                    'ffmpeg',
+                    '-stream_loop', '-1',  # BGMを無限ループ
+                    '-i', self.bgm_path,  # 入力0: BGM
+                    '-f', 'wav',  # WAV形式で読み取り
+                    '-i', self.audio_fifo_path,  # 入力1: FIFOパイプから音声入力
+                    '-filter_complex',
+                    f'[0:a]volume={self.bgm_volume}[bgm];'
+                    f'[1:a]volume=1.0[voice];'
+                    f'[bgm][voice]amix=inputs=2:duration=longest:dropout_transition=0[a]',
+                    '-map', '[a]',
+                    '-c:a', 'aac',  # AACコーデック
+                    '-b:a', '128k',  # ビットレート
+                    '-ar', '44100',  # サンプルレート
+                    '-f', 'flv',  # FLV形式
+                    self.stream_url
+                ]
+            else:
+                # BGMなし：FIFOのみ
+                ffmpeg_cmd = [
+                    'ffmpeg',
+                    '-f', 'wav',  # WAV形式で読み取り
+                    '-i', self.audio_fifo_path,  # FIFOパイプから音声入力
+                    '-c:a', 'aac',  # AACコーデック
+                    '-b:a', '128k',  # ビットレート
+                    '-ar', '44100',  # サンプルレート
+                    '-f', 'flv',  # FLV形式
+                    self.stream_url
+                ]
 
             self.ffmpeg_process = subprocess.Popen(
                 ffmpeg_cmd,
@@ -408,7 +338,7 @@ class AudioStreamer:
                 stderr=subprocess.PIPE
             )
 
-            print("YouTubeストリーミング配信を開始しました（音声のみ、連続ストリーミングモード + BGM）")
+            print("YouTubeストリーミング配信を開始しました（音声のみ、BGM + マイク入力方式）")
             return True
 
         except Exception as e:
@@ -422,10 +352,10 @@ class AudioStreamer:
         """
         音声データを再生してストリーミング配信
 
-        連続ストリーミング方式：
+        連続ストリーミング方式（BGM + マイク入力方式）：
         - 音声データをキューに追加
-        - フィーダースレッドが自動的にBGMとミックスしてFIFOに書き込む
-        - 音声の再生が完了するまで待機
+        - フィーダースレッドがFIFOに書き込む
+        - FFmpegがBGMと自動的にミックス
         - ストリームの切り替えなし
 
         Args:
@@ -443,9 +373,10 @@ class AudioStreamer:
 
             print("音声データをキューに追加中...")
             self.audio_queue.put(audio_data)
-            print("音声データをキューに追加しました（切り替えなし、BGMとミックス）")
+            print("音声データをキューに追加しました（BGM + マイク入力方式）")
 
-            # 音声が完全に再生されるまで待機（少し余裕を持たせる）
+            # 音声が完全に再生されるまで待機
+            # FFmpegがペースを制御するため、実際の再生時間分だけ待つ
             time.sleep(audio_duration + 0.5)
 
             return True
