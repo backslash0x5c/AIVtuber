@@ -1,0 +1,11 @@
+[Unit]
+Description=Virtual X display for headless OBS
+PartOf=radio.target
+
+[Service]
+ExecStart=/usr/bin/Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=radio.target

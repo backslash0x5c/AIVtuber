@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>AI Radio Overlay</title>
+<style>
+  :root {
+    --accent: #b48cf2;
+    --accent2: #f2a2c8;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    font-family: "Noto Sans CJK JP", "Noto Sans JP", sans-serif;
+    background: linear-gradient(160deg, #1b1035 0%, #2a1a55 55%, #3c2a6e 100%);
+    position: relative;
+  }
+
+  /* ふわふわ漂う背景の光 */
+  .blob {
+    position: absolute; border-radius: 50%; filter: blur(60px); opacity: .35;
+    animation: drift 24s ease-in-out infinite alternate;
+  }
+  .blob.b1 { width: 40vw; height: 40vw; background: #7c4dff; top: -12vw; left: -8vw; }
+  .blob.b2 { width: 34vw; height: 34vw; background: #ff8ac2; bottom: -10vw; right: 22vw; animation-delay: -8s; }
+  .blob.b3 { width: 26vw; height: 26vw; background: #4dc3ff; top: 22vh; right: -6vw; animation-delay: -16s; }
+  @keyframes drift {
+    from { transform: translate(0, 0) scale(1); }
+    to   { transform: translate(4vw, -3vh) scale(1.15); }
+  }
+
+  /* タイトル */
+  .logo {
+    position: absolute; top: 3.5vh; left: 3vw; color: #fff; z-index: 3;
+  }
+  .logo h1 { font-size: 3.2vh; letter-spacing: .2em; font-weight: 800; }
+  .logo p  { font-size: 1.8vh; opacity: .7; margin-top: .5vh; letter-spacing: .1em; }
+  .clock {
+    position: absolute; top: 3.5vh; right: 3vw; color: #fff; z-index: 3;
+    font-size: 3vh; font-weight: 700; font-variant-numeric: tabular-nums; opacity: .85;
+  }
+
+  /* アバター */
+  #avatar-wrap {
+    position: absolute; right: 6vw; bottom: 14vh; width: 34vh; height: 46vh; z-index: 2;
+    animation: bob 3.4s ease-in-out infinite;
+  }
+  @keyframes bob {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-1.4vh); }
+  }
+  #avatar-wrap svg, #avatar-wrap img { width: 100%; height: 100%; }
+  #avatar-img { display: none; object-fit: contain; }
+
+  /* 状態インジケータ */
+  #status {
+    position: absolute; right: 6vw; bottom: 9vh; width: 34vh; text-align: center;
+    color: #fff; font-size: 2vh; opacity: 0; transition: opacity .3s; z-index: 2;
+    text-shadow: 0 0 8px rgba(0,0,0,.5);
+  }
+  #status.visible { opacity: .85; }
+
+  /* コメント表示 */
+  #comment-card {
+    position: absolute; left: 3vw; top: 16vh; max-width: 44vw; z-index: 3;
+    background: rgba(255,255,255,.94); border-radius: 1.6vh; padding: 2vh 2.4vh;
+    box-shadow: 0 6px 30px rgba(0,0,0,.35);
+    opacity: 0; transform: translateY(1.5vh); transition: all .4s ease;
+  }
+  #comment-card.visible { opacity: 1; transform: translateY(0); }
+  #comment-card.superchat {
+    background: linear-gradient(135deg, #ffe9a8, #ffd24d);
+    box-shadow: 0 6px 34px rgba(255,200,60,.55);
+  }
+  #comment-author { font-size: 2vh; font-weight: 700; color: var(--accent); }
+  #comment-card.superchat #comment-author { color: #7a5200; }
+  #comment-amount { font-size: 2vh; font-weight: 800; color: #b0093c; margin-left: 1vw; }
+  #comment-text { font-size: 2.4vh; color: #222; margin-top: .8vh; line-height: 1.5; word-break: break-word; }
+
+  /* 字幕(返答) */
+  #subtitle-wrap {
+    position: absolute; left: 50%; bottom: 4.5vh; transform: translateX(-50%);
+    width: 88vw; z-index: 4; display: flex; justify-content: center;
+  }
+  #subtitle {
+    background: rgba(15, 8, 40, .82); border: 2px solid rgba(180,140,242,.7);
+    color: #fff; font-size: 3vh; line-height: 1.6; padding: 1.8vh 3vw;
+    border-radius: 2vh; max-width: 100%;
+    opacity: 0; transition: opacity .35s; box-shadow: 0 4px 24px rgba(0,0,0,.4);
+  }
+  #subtitle.visible { opacity: 1; }
+</style>
+</head>
+<body>
+  <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+
+  <div class="logo">
+    <h1>24H AI RADIO</h1>
+    <p>コメント読み上げ中 — お気軽にどうぞ</p>
+  </div>
+  <div class="clock" id="clock">--:--</div>
+
+  <div id="avatar-wrap">
+    <!-- 自作の立ち絵を使う場合: avatar/avatar_closed.png と avatar/avatar_open.png を置くと自動で切り替わる -->
+    <img id="avatar-img" alt="avatar">
+    <svg id="avatar-svg" viewBox="0 0 400 540" xmlns="http://www.w3.org/2000/svg">
+      <!-- 後ろ髪 -->
+      <path d="M200 40 C 90 40 60 150 65 250 C 68 330 55 420 85 455 L 130 430 L 120 300 L 280 300 L 270 430 L 315 455 C 345 420 332 330 335 250 C 340 150 310 40 200 40 Z" fill="#7a5fc0"/>
+      <!-- 体 -->
+      <path d="M120 380 C 120 340 160 320 200 320 C 240 320 280 340 280 380 L 292 520 L 108 520 Z" fill="#5b48a8"/>
+      <path d="M160 330 L 200 380 L 240 330 C 225 322 212 320 200 320 C 188 320 175 322 160 330 Z" fill="#fff"/>
+      <circle cx="200" cy="368" r="7" fill="#ffd24d"/>
+      <!-- 首 -->
+      <rect x="188" y="290" width="24" height="40" rx="10" fill="#ffdfc9"/>
+      <!-- 顔 -->
+      <ellipse cx="200" cy="200" rx="105" ry="110" fill="#ffe6d3"/>
+      <!-- 前髪 -->
+      <path d="M200 60 C 110 60 90 140 95 185 C 120 175 135 130 145 120 C 150 140 165 150 200 150 C 235 150 250 140 255 120 C 265 130 280 175 305 185 C 310 140 290 60 200 60 Z" fill="#8a6fd0"/>
+      <!-- サイドの髪 -->
+      <path d="M95 180 C 82 220 84 268 96 300 C 108 280 112 230 112 200 Z" fill="#8a6fd0"/>
+      <path d="M305 180 C 318 220 316 268 304 300 C 292 280 288 230 288 200 Z" fill="#8a6fd0"/>
+      <!-- ヘッドホン -->
+      <path d="M85 175 C 85 90 315 90 315 175" fill="none" stroke="#332355" stroke-width="14" stroke-linecap="round"/>
+      <rect x="72" y="165" width="30" height="60" rx="14" fill="#332355"/>
+      <rect x="298" y="165" width="30" height="60" rx="14" fill="#332355"/>
+      <circle cx="87" cy="195" r="7" fill="var(--accent, #b48cf2)"/>
+      <circle cx="313" cy="195" r="7" fill="var(--accent, #b48cf2)"/>
+      <!-- 目 -->
+      <g id="eyes">
+        <ellipse class="eye" cx="160" cy="210" rx="13" ry="18" fill="#3a2a55"/>
+        <ellipse class="eye" cx="240" cy="210" rx="13" ry="18" fill="#3a2a55"/>
+        <circle cx="164" cy="203" r="4.5" fill="#fff"/>
+        <circle cx="244" cy="203" r="4.5" fill="#fff"/>
+      </g>
+      <!-- 頬 -->
+      <ellipse cx="138" cy="242" rx="14" ry="8" fill="#ffb9b0" opacity=".75"/>
+      <ellipse cx="262" cy="242" rx="14" ry="8" fill="#ffb9b0" opacity=".75"/>
+      <!-- 口 (閉/開をJSで切り替え) -->
+      <path id="mouth-closed" d="M185 262 Q 200 272 215 262" fill="none" stroke="#c96a5e" stroke-width="5" stroke-linecap="round"/>
+      <ellipse id="mouth-open" cx="200" cy="266" rx="15" ry="12" fill="#a3423a" style="display:none"/>
+    </svg>
+  </div>
+  <div id="status"></div>
+
+  <div id="comment-card">
+    <span id="comment-author"></span><span id="comment-amount"></span>
+    <div id="comment-text"></div>
+  </div>
+
+  <div id="subtitle-wrap"><div id="subtitle"></div></div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+
+  // ---- 時計 ----
+  const tick = () => {
+    const d = new Date();
+    $("clock").textContent =
+      String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+  };
+  tick(); setInterval(tick, 5000);
+
+  // ---- カスタム立ち絵 (PNG) があればSVGの代わりに使う ----
+  let useImages = false;
+  const imgClosed = "/static/avatar_closed.png";
+  const imgOpen = "/static/avatar_open.png";
+  fetch(imgClosed, { method: "HEAD" }).then((r) => {
+    if (!r.ok) return;
+    fetch(imgOpen, { method: "HEAD" }).then((r2) => {
+      if (!r2.ok) return;
+      useImages = true;
+      $("avatar-svg").style.display = "none";
+      const img = $("avatar-img");
+      img.src = imgClosed;
+      img.style.display = "block";
+    });
+  }).catch(() => {});
+
+  // ---- 口パク ----
+  let speaking = false;
+  let mouthTimer = null;
+  const setMouth = (open) => {
+    if (useImages) {
+      $("avatar-img").src = open ? imgOpen : imgClosed;
+    } else {
+      $("mouth-open").style.display = open ? "" : "none";
+      $("mouth-closed").style.display = open ? "none" : "";
+    }
+  };
+  const startMouth = () => {
+    if (mouthTimer) return;
+    let open = false;
+    mouthTimer = setInterval(() => {
+      open = !open || Math.random() < 0.25;
+      setMouth(open);
+    }, 130);
+  };
+  const stopMouth = () => {
+    clearInterval(mouthTimer); mouthTimer = null; setMouth(false);
+  };
+
+  // ---- まばたき ----
+  const blink = () => {
+    document.querySelectorAll(".eye").forEach((e) => {
+      e.style.transformOrigin = "center 210px";
+      e.style.transform = "scaleY(0.12)";
+      setTimeout(() => { e.style.transform = ""; }, 140);
+    });
+    setTimeout(blink, 2500 + Math.random() * 3500);
+  };
+  setTimeout(blink, 2000);
+
+  // ---- 字幕 ----
+  let subtitleHideTimer = null;
+  const showSubtitle = (text) => {
+    const el = $("subtitle");
+    el.textContent = text;
+    el.classList.add("visible");
+    clearTimeout(subtitleHideTimer);
+  };
+  const scheduleHideSubtitle = () => {
+    clearTimeout(subtitleHideTimer);
+    subtitleHideTimer = setTimeout(() => $("subtitle").classList.remove("visible"), 4000);
+  };
+
+  // ---- 状態表示 ----
+  const STATUS_TEXT = { thinking: "かんがえちゅう…", speaking: "" , idle: "" };
+  const showStatus = (state) => {
+    const el = $("status");
+    const text = STATUS_TEXT[state] ?? "";
+    el.textContent = text;
+    el.classList.toggle("visible", !!text);
+  };
+
+  // ---- コメントカード ----
+  const showComment = (ev) => {
+    const card = $("comment-card");
+    $("comment-author").textContent = ev.author;
+    $("comment-amount").textContent = ev.superchat ? (ev.amount || "Super Chat!") : "";
+    $("comment-text").textContent = ev.message;
+    card.classList.toggle("superchat", !!ev.superchat);
+    card.classList.add("visible");
+  };
+
+  // ---- WebSocket ----
+  const connect = () => {
+    const ws = new WebSocket(`ws://${location.host}/ws`);
+    ws.onmessage = (msg) => {
+      let ev;
+      try { ev = JSON.parse(msg.data); } catch { return; }
+      switch (ev.type) {
+        case "comment": showComment(ev); break;
+        case "reply": showSubtitle(ev.text); break;
+        case "speech":
+          if (ev.state === "start") { speaking = true; startMouth(); }
+          else { speaking = false; stopMouth(); scheduleHideSubtitle(); }
+          break;
+        case "status": showStatus(ev.state); break;
+      }
+    };
+    ws.onclose = () => { stopMouth(); setTimeout(connect, 2000); };
+    ws.onerror = () => ws.close();
+  };
+  connect();
+})();
+</script>
+</body>
+</html>

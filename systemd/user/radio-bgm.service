@@ -1,0 +1,13 @@
+[Unit]
+Description=BGM loop player into virtual sink
+PartOf=radio.target
+After=radio-audio.service
+Requires=radio-audio.service
+
+[Service]
+ExecStart=/bin/bash __RADIO_DIR__/scripts/run_bgm.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=radio.target

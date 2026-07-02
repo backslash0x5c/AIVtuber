@@ -1,0 +1,11 @@
+[Unit]
+Description=VOICEVOX ENGINE (text-to-speech)
+PartOf=radio.target
+
+[Service]
+ExecStart=/bin/bash __RADIO_DIR__/scripts/run_voicevox.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=radio.target

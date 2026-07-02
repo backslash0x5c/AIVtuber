@@ -1,0 +1,14 @@
+[Unit]
+Description=Headless OBS Studio (RTMP encoder)
+PartOf=radio.target
+After=radio-xvfb.service radio-audio.service
+Requires=radio-xvfb.service radio-audio.service
+
+[Service]
+Environment=DISPLAY=:99
+ExecStart=/bin/bash __RADIO_DIR__/scripts/run_obs.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=radio.target

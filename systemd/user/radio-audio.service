@@ -1,0 +1,11 @@
+[Unit]
+Description=PulseAudio virtual sink for radio mixing
+PartOf=radio.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/bash __RADIO_DIR__/scripts/setup_audio.sh
+
+[Install]
+WantedBy=radio.target

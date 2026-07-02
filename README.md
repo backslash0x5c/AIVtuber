@@ -1,248 +1,217 @@
-# 24時間ラジオ対話配信システム
+# 24時間AITuberラジオ配信システム
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/license/apache-2-0)
-[![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![Platform: Ollama](https://img.shields.io/badge/Platform-Ollama-green.svg)](https://ollama.com/)
-[![gemma3:1b](https://img.shields.io/badge/gemma3-1b-orange.svg)](https://ollama.com/library/gemma3)
 [![Voice: VOICEVOX](https://img.shields.io/badge/Voice-VOICEVOX-brightgreen.svg)](https://voicevox.hiroshiba.jp/)
+[![OBS](https://img.shields.io/badge/Encoder-OBS%20Studio-302E31.svg)](https://obsproject.com/)
 
-YouTubeライブ配信でコメントに自動応答する24時間ラジオ配信システムです。
+Ubuntu Server (GUIなし・SSHのみ) 上で完結する、YouTube 24時間AIラジオ配信システムです。
 
-## 機能
+```
+YouTubeコメント/スパチャ取得 (pytchat)
+        ↓
+ローカルLLMで返答生成 (Ollama / gemma3:1b)
+        ↓
+音声合成 (VOICEVOX ENGINE)
+        ↓
+PulseAudio仮想シンクへ再生 ←──同時に──→ BGM (mpvループ再生)
+        ↓  (OSレベルでミキシング・発話中はBGM自動ダッキング)
+OBS (Xvfb上でヘッドレス常駐・obs-websocketでCLI制御)
+  ├─ 音声: 仮想シンクのモニターをキャプチャ
+  └─ 映像: 2Dアバターページ(ブラウザソース: 口パク/字幕/コメント表示)
+        ↓
+YouTube Live (RTMP)
+```
 
-- YouTubeライブチャットからコメントを取得
-- Ollama (gemma3:1b) を使用したAI応答生成
-- VOICEVOXによる音声合成
-- 静止画 + 音声でYouTubeライブ配信
-- コメントがない時の自動雑談機能
-- 会話履歴を保持して文脈に沿った対話
+## 旧実装の問題と解決策
+
+旧実装は**発話のたびに配信用ffmpegプロセスを終了→再起動**していたため、
+
+- 発話のたびにRTMP接続が切れて配信が不安定になる
+- VOICEVOX音声とBGMの同時再生が構造的に不可能
+
+という問題がありました。新実装では **エンコーダ(OBS)は一度も再起動しません**。
+
+1. PulseAudioの**null sink (`radio_mix`)** を常設する
+2. BGMはmpvが `radio_mix` へ**常時ループ再生**する
+3. VOICEVOXの音声はpaplayで同じ `radio_mix` へ再生する → **ミキシングはOSが行う**
+4. 発話中は `pactl` でBGMのsink-input音量だけを下げる(**ダッキング**)、発話終了で戻す
+5. OBSは `radio_mix.monitor` を音声ソースとして**常時配信し続ける**
 
 ## システム要件
 
-- **OS**: Ubuntu Server (CLI環境)
-- **Python**: 3.8以上
-- **FFmpeg**: 音声エンコードと配信用
-- **Ollama**: ローカルLLM実行環境
-- **VOICEVOX**: 音声合成エンジン
+- Ubuntu Server 22.04 / 24.04 (GUI不要、SSH接続のみで運用可能)
+- メモリ 8GB以上推奨 (OBS + VOICEVOX + Ollamaを同居させるため)
+- Python 3.10+
 
 ## インストール
 
-### 1. 必要なソフトウェアのインストール
-
 ```bash
-# システムパッケージの更新
-sudo apt update && sudo apt upgrade -y
-
-# FFmpegのインストール
-sudo apt install -y ffmpeg python3 python3-pip
-
-# Ollamaのインストール
-curl -fsSL https://ollama.com/install.sh | sh
-
-# VOICEVOXのインストール
-# https://voicevox.hiroshiba.jp/ から最新版のダウンロードスクリプトを実行
-# スクリプト実行により./voicevoxディレクトリが作成される
-
-# AppImageを展開
-chmod +x ./voicevox/VOICEVOX.AppImage
-./voicevox/VOICEVOX.AppImage --appimage-extract
-```
-
-### 2. プロジェクトのセットアップ
-
-```bash
-# リポジトリをクローン
 git clone <repository-url>
 cd radio-streaming
-
-# 仮想環境の作成と有効化
-python3 -m venv venv
-source venv/bin/activate
-
-# Python依存パッケージのインストール
-pip install pytchat requests python-dotenv pydub
-
-# セットアップスクリプトを実行
 ./setup.sh
 ```
 
-### 3. 環境変数の設定
+`setup.sh` が以下をすべて行います(冪等なので再実行可):
 
-`.env`ファイルを編集して、必要な設定を入力します:
+1. APTパッケージ (ffmpeg, mpv, pulseaudio, xvfb, fonts-noto-cjk など)
+2. OBS Studio (公式PPA)
+3. Ollama
+4. VOICEVOX ENGINE (Dockerがあれば初回起動時にイメージ取得、無ければ `scripts/install_voicevox.sh` がLinux CPU版をダウンロード)
+5. Python仮想環境 + 依存パッケージ
+6. `.env` の生成 (obs-websocketパスワードを自動生成)
+7. systemdユーザーユニットの配置 + linger有効化 (SSHを切っても動き続ける)
 
-```bash
-nano .env
-```
-
-必須設定:
-- `YOUTUBE_VIDEO_ID`: YouTubeライブ配信のビデオID
-- `YOUTUBE_STREAM_KEY`: YouTube配信キー
-
-オプション設定:
-- `OLLAMA_MODEL`: 使用するLLMモデル (デフォルト: gemma3:1b)
-- `VOICEVOX_SPEAKER_ID`: 話者ID (デフォルト: 1)
-- `IDLE_CHAT_INTERVAL`: 雑談までの待機時間（秒）
-
-### 4. Ollamaモデルのダウンロード
+### セットアップ後の設定
 
 ```bash
+# LLMモデルの取得
 ollama pull gemma3:1b
+
+# 必須設定の入力
+nano .env
+#   YOUTUBE_VIDEO_ID=<ライブ配信のビデオID>
+#   YOUTUBE_STREAM_KEY=<YouTube Studioの配信キー>
+
+# BGMを置く(任意。無ければ声のみで配信される)
+cp ~/music/*.mp3 bgm/
 ```
 
-### 5. 配信用静止画の準備
+## 起動・停止
 
 ```bash
-# プロジェクトルートにimage.pngを配置
-# 推奨サイズ: 1280x720 または 1920x1080
-cp /path/to/your/image.png ./image.png
+# 一括起動 (Xvfb → 仮想シンク → VOICEVOX → OBS → BGM → 本体)
+systemctl --user start radio.target
+
+# 状態確認
+systemctl --user status 'radio-*'
+
+# メインアプリのログを追う
+journalctl --user -u radio-app -f
+
+# 一括停止
+systemctl --user stop radio.target
+
+# OS起動時に自動起動 (setup.shでenable済み)
+systemctl --user enable radio.target
 ```
 
-静止画がない場合は音声のみで配信されます。
+デバッグ時は本体だけ手動起動もできます: `./run.sh`
 
-## 使用方法
+## 動作の流れ
 
-### 1. 必要なサービスを起動
+- 起動するとOBSにシーン(`Radio`)・ブラウザソース(アバター)・音声キャプチャ(`radio_mix.monitor`)・配信先(YouTube RTMP)を**obs-websocket経由で自動構築**し、配信を開始します
+- コメントが来ると LLM→VOICEVOX→読み上げ、画面にコメントカードと字幕を表示し、アバターが口パクします
+- **スーパーチャットは優先キュー**で必ず処理し、金額に触れて感謝します
+- コメントが `IDLE_CHAT_INTERVAL` 秒(既定180秒)無いと自動で雑談します
+- 30秒ごとにOBSの配信状態を監視し、落ちていれば自動で配信を再開します
+- YouTubeチャット切断時は指数バックオフで自動再接続します
 
-#### VOICEVOXの起動
+## カスタマイズ
+
+### キャラクター
+
+- 名前: `.env` の `CHARACTER_NAME`
+- 性格・口調: リポジトリ直下に `persona.txt` を置くとシステムプロンプトを丸ごと差し替えられます (`{name}` がキャラ名に展開されます)
+
+### 2Dアバター
+
+既定では `avatar/index.html` 内のSVGキャラクター(口パク・まばたき・浮遊アニメ付き)が表示されます。
+自作の立ち絵を使う場合は、次の2枚のPNGを置くだけで自動で切り替わります:
+
+```
+avatar/avatar_closed.png   # 口を閉じた絵
+avatar/avatar_open.png     # 口を開けた絵
+```
+
+レイアウトや配色を変えたい場合は `avatar/index.html` を直接編集してください。
+確認はローカルで `http://127.0.0.1:8500/` を開くだけです(SSHポートフォワード可)。
+
+### 音声
 
 ```bash
-# VOICEVOXをバックグラウンドで起動
-# nohup: ターミナルを閉じても処理を継続
-# &: バックグラウンドで実行
-nohup ./voicevox/squashfs-root/vv-engine/run > voicevox.log 2>&1 &
-
-# 起動確認
-curl http://localhost:50021/version
+# 話者一覧
+curl -s http://127.0.0.1:50021/speakers | python3 -m json.tool
 ```
 
-#### Ollamaの起動
+`.env` の `VOICEVOX_SPEAKER_ID` / `VOICEVOX_SPEED` を変更します。
+
+### BGMと音量バランス
+
+- `bgm/` に mp3/ogg/wav/flac/m4a/opus を置くとシャッフルループ再生されます
+- 発話中のBGM音量は `BGM_DUCK_PERCENT` (既定25%) で調整します
+
+## トラブルシューティング
+
+### 音が配信に乗らない
 
 ```bash
-# Ollamaサーバーを起動（別のターミナルで）
-ollama serve
+# 仮想シンクの存在確認
+pactl list short sinks | grep radio_mix
+
+# 手動でテスト音を流す (配信に音が乗ればOK)
+paplay --device=radio_mix /usr/share/sounds/alsa/Front_Center.wav
 ```
 
-### 2. ラジオ配信システムの起動
+### OBSに接続できない
 
 ```bash
-# 仮想環境を有効化
-source venv/bin/activate
-
-# プログラムを起動
-./run.sh
+systemctl --user status radio-obs
+journalctl --user -u radio-obs -n 50
+# Xvfbが先に起動しているか
+systemctl --user status radio-xvfb
 ```
 
-### 3. 停止方法
+`.env` の `OBS_WS_PASSWORD` が空だとOBSは起動しません(`setup.sh` が自動生成します)。
 
-`Ctrl+C` を押してプログラムを停止します。
+### ブラウザソースで日本語が「豆腐」になる
 
-## システムフロー
+`fonts-noto-cjk` がインストールされているか確認してください(`setup.sh` に含まれています)。
 
+### VOICEVOX / Ollama に接続できない
+
+```bash
+curl http://127.0.0.1:50021/version   # VOICEVOX
+curl http://127.0.0.1:11434/api/tags  # Ollama
+journalctl --user -u radio-voicevox -n 50
 ```
-YouTubeコメント取得
-       ↓
-   コメントあり?
-  ↙          ↘
-YES          NO
- ↓            ↓
-コメント処理  30秒経過?
- ↓            ↓
-Ollama応答   雑談生成
- ↓            ↓
- └─→ VOICEVOX ←┘
-       ↓
-    音声合成
-       ↓
-  YouTube配信
+
+### SSHを切ると止まる
+
+```bash
+sudo loginctl enable-linger $USER
 ```
+
+### 配信が始まらない
+
+- `YOUTUBE_STREAM_KEY` が正しいか、YouTube Studio側で配信枠が作られているか確認
+- `journalctl --user -u radio-app -f` で `配信を開始します...` の後のエラーを確認
 
 ## ファイル構成
 
 ```
 radio-streaming/
-├── src/
-│   ├── __init__.py          # パッケージ初期化
-│   ├── main.py              # メインプログラム
-│   ├── config.py            # 設定管理
-│   ├── youtube_client.py    # YouTubeコメント取得
-│   ├── ollama_client.py     # Ollama API連携
-│   ├── voicevox_client.py   # VOICEVOX連携
-│   └── audio_streamer.py    # FFmpeg配信（静止画+音声）
-├── setup.sh                # セットアップスクリプト
-├── run.sh                  # 起動スクリプト
-├── .env.example            # 環境変数テンプレート
-├── .env                    # 環境変数設定（要作成）
-├── image.png               # 配信用静止画（要配置）
-└── README.md               # このファイル
-```
-
-## トラブルシューティング
-
-### VOICEVOXに接続できない
-
-- VOICEVOXが起動しているか確認
-- `http://localhost:50021`でアクセスできるか確認
-
-```bash
-curl http://localhost:50021/version
-```
-
-### Ollamaに接続できない
-
-- Ollamaサービスが起動しているか確認
-- モデルがダウンロードされているか確認
-
-```bash
-ollama list
-```
-
-### YouTubeコメントが取得できない
-
-- `YOUTUBE_VIDEO_ID`が正しいか確認
-- ライブ配信が開始されているか確認
-- チャット機能が有効になっているか確認
-
-### FFmpegエラー
-
-- FFmpegがインストールされているか確認
-- `YOUTUBE_STREAM_KEY`が正しいか確認
-
-```bash
-ffmpeg -version
-```
-
-## 設定のカスタマイズ
-
-### 雑談の頻度を変更
-
-`.env`ファイルで`IDLE_CHAT_INTERVAL`を変更:
-
-```
-IDLE_CHAT_INTERVAL=60  # 60秒後に雑談
-```
-
-### 会話履歴の保持数を変更
-
-`.env`ファイルで`MAX_CONVERSATION_HISTORY`を変更:
-
-```
-MAX_CONVERSATION_HISTORY=20  # 最大20件の会話を記憶
-```
-
-### VOICEVOXの話者を変更
-
-利用可能な話者を確認:
-
-```bash
-curl http://localhost:50021/speakers | python3 -m json.tool
-```
-
-`.env`ファイルで`VOICEVOX_SPEAKER_ID`を変更:
-
-```
-VOICEVOX_SPEAKER_ID=3  # 話者IDを変更
+├── app/                      # メインアプリ (Python / asyncio)
+│   ├── main.py               #   オーケストレータ・死活監視
+│   ├── config.py             #   .env 読み込み
+│   ├── chat_source.py        #   YouTubeコメント/スパチャ取得 (優先キュー)
+│   ├── llm.py                #   Ollamaクライアント (返答/雑談生成・読み上げ用整形)
+│   ├── tts.py                #   VOICEVOXクライアント
+│   ├── audio.py              #   PulseAudioミキシング・BGMダッキング
+│   ├── obs_controller.py     #   obs-websocketでシーン構築・配信制御
+│   ├── overlay_server.py     #   アバターページ配信 + WebSocket
+│   └── prompts.py            #   キャラクター設定プロンプト
+├── avatar/index.html         # 2Dアバター/字幕/コメントオーバーレイ
+├── bgm/                      # BGMファイル置き場
+├── scripts/                  # 各サービスのCLIラッパー
+├── systemd/user/             # systemdユーザーユニット
+├── setup.sh                  # セットアップスクリプト
+├── run.sh                    # 手動起動 (デバッグ用)
+└── .env.example              # 設定テンプレート
 ```
 
 ## ライセンス
 
-このプロジェクトはApache License 2.0の下で公開されています。詳細は[LICENSE](LICENSE)ファイルを参照してください。
+Apache License 2.0 — 詳細は [LICENSE](LICENSE) を参照してください。
+VOICEVOXで生成した音声の利用規約は[VOICEVOX公式](https://voicevox.hiroshiba.jp/)に従ってください。

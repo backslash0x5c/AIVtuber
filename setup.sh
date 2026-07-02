@@ -1,99 +1,82 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# 24時間AIラジオ配信システム セットアップスクリプト (Ubuntu Server 向け)
+# 実行後は README.md の「起動」手順に従ってください。
+set -euo pipefail
 
-echo "=================================================="
-echo "24時間ラジオ対話配信システム - セットアップ"
-echo "=================================================="
-echo ""
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$REPO_DIR"
 
-# エラーが発生したら停止
-set -e
+echo "==== [1/7] APTパッケージのインストール ===="
+sudo apt-get update
+sudo apt-get install -y \
+    curl ca-certificates software-properties-common \
+    python3 python3-venv python3-pip \
+    ffmpeg mpv \
+    pulseaudio pulseaudio-utils \
+    xvfb p7zip-full \
+    fonts-noto-cjk
 
-# Python3のチェック
-echo "[1/6] Python3の確認..."
-if ! command -v python3 &> /dev/null; then
-    echo "エラー: Python3がインストールされていません"
-    exit 1
-fi
-echo "✓ Python3: $(python3 --version)"
-
-# pipのチェック
-echo ""
-echo "[2/6] pipの確認..."
-if ! command -v pip3 &> /dev/null; then
-    echo "エラー: pip3がインストールされていません"
-    exit 1
-fi
-echo "✓ pip3がインストールされています"
-
-# FFmpegのチェック
-echo ""
-echo "[3/6] FFmpegの確認..."
-if ! command -v ffmpeg &> /dev/null; then
-    echo "警告: FFmpegがインストールされていません"
-    echo "FFmpegをインストールしてください:"
-    echo "  sudo apt update && sudo apt install -y ffmpeg"
+echo "==== [2/7] OBS Studio のインストール ===="
+if ! command -v obs >/dev/null; then
+    sudo add-apt-repository -y ppa:obsproject/obs-studio
+    sudo apt-get update
+    sudo apt-get install -y obs-studio
 else
-    echo "✓ FFmpeg: $(ffmpeg -version | head -n1)"
+    echo "OBSはインストール済みです"
 fi
 
-# 仮想環境のチェック
-echo ""
-echo "[4/6] 仮想環境の確認..."
-if [ -z "$VIRTUAL_ENV" ]; then
-    echo "警告: 仮想環境が有効になっていません"
-    echo "仮想環境を有効化してください:"
-    echo "  source venv/bin/activate"
-    echo ""
-    echo "Python依存パッケージをスキップします"
+echo "==== [3/7] Ollama のインストール ===="
+if ! command -v ollama >/dev/null; then
+    curl -fsSL https://ollama.com/install.sh | sh
 else
-    echo "✓ 仮想環境が有効です: $VIRTUAL_ENV"
-    echo ""
-    echo "Python依存パッケージのインストール..."
-    pip install pytchat requests python-dotenv pydub
-    echo "✓ 依存パッケージのインストール完了"
+    echo "Ollamaはインストール済みです"
 fi
 
-# .envファイルの作成
-echo ""
-echo "[5/6] 環境変数ファイルの設定..."
-if [ ! -f .env ]; then
+echo "==== [4/7] VOICEVOX ENGINE のインストール ===="
+if command -v docker >/dev/null; then
+    echo "Dockerが利用可能です。エンジンは初回起動時にDockerイメージを取得します。"
+elif [[ -x "$REPO_DIR/voicevox_engine/run" ]]; then
+    echo "VOICEVOX ENGINEはインストール済みです"
+else
+    bash "$REPO_DIR/scripts/install_voicevox.sh"
+fi
+
+echo "==== [5/7] Python仮想環境の構築 ===="
+if [[ ! -d venv ]]; then
+    python3 -m venv venv
+fi
+./venv/bin/pip install --upgrade pip -q
+./venv/bin/pip install -r requirements.txt -q
+echo "Python依存パッケージをインストールしました"
+
+echo "==== [6/7] .env の準備 ===="
+if [[ ! -f .env ]]; then
     cp .env.example .env
-    echo "✓ .envファイルを作成しました"
-    echo "  .envファイルを編集して、必要な設定を入力してください:"
-    echo "  - YOUTUBE_VIDEO_ID"
-    echo "  - YOUTUBE_STREAM_KEY"
+    # obs-websocket用のパスワードを自動生成
+    WS_PW=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)
+    sed -i "s/^OBS_WS_PASSWORD=.*/OBS_WS_PASSWORD=$WS_PW/" .env
+    echo ".env を作成しました。YOUTUBE_VIDEO_ID と YOUTUBE_STREAM_KEY を設定してください:"
+    echo "  nano $REPO_DIR/.env"
 else
-    echo "✓ .envファイルは既に存在します"
+    echo ".env は既に存在します"
 fi
 
-# Ollamaのチェック
-echo ""
-echo "[6/6] Ollamaの確認..."
-if ! command -v ollama &> /dev/null; then
-    echo "警告: Ollamaがインストールされていません"
-    echo "Ollamaをインストールしてください:"
-    echo "  curl -fsSL https://ollama.com/install.sh | sh"
-else
-    echo "✓ Ollamaがインストールされています"
-    echo ""
-    echo "gemma3:1bモデルをダウンロードしますか? (y/n)"
-    read -r response
-    if [[ "$response" =~ ^[Yy]$ ]]; then
-        echo "モデルをダウンロード中..."
-        ollama pull gemma3:1b
-        echo "✓ モデルのダウンロード完了"
-    fi
-fi
+echo "==== [7/7] systemd ユーザーユニットの配置 ===="
+mkdir -p ~/.config/systemd/user
+for unit in "$REPO_DIR"/systemd/user/*; do
+    sed "s|__RADIO_DIR__|$REPO_DIR|g" "$unit" > ~/.config/systemd/user/"$(basename "$unit")"
+done
+systemctl --user daemon-reload
+systemctl --user enable radio-xvfb radio-audio radio-voicevox radio-obs radio-bgm radio-app radio.target
+# ログアウト後もユーザーサービスを動かし続ける
+sudo loginctl enable-linger "$USER"
+echo "systemdユニットを配置しました"
 
-echo ""
-echo "=================================================="
-echo "セットアップ完了!"
-echo "=================================================="
-echo ""
-echo "次のステップ:"
-echo "1. .envファイルを編集して設定を入力"
-echo "2. 配信用静止画を配置 (image.png)"
-echo "3. VOICEVOXを起動 (nohup ./voicevox/squashfs-root/vv-engine/run > voicevox.log 2>&1 &)"
-echo "4. Ollamaを起動 (ollama serve)"
-echo "5. プログラムを実行 (./run.sh)"
-echo ""
+echo
+echo "==== セットアップ完了 ===="
+echo "次の手順:"
+echo "  1. LLMモデルの取得:        ollama pull \$(grep OLLAMA_MODEL .env | cut -d= -f2)"
+echo "  2. .env の設定:            nano .env  (YOUTUBE_VIDEO_ID / YOUTUBE_STREAM_KEY)"
+echo "  3. BGMを置く(任意):        cp your_music.mp3 bgm/"
+echo "  4. 起動:                   systemctl --user start radio.target"
+echo "  5. ログ確認:               journalctl --user -u radio-app -f"
