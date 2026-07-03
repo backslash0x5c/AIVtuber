@@ -5,7 +5,7 @@
 <title>AI Radio Overlay</title>
 <style>
   :root {
-    --accent: #b48cf2;
+    --accent: #ff8a5c;
     --accent2: #f2a2c8;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -40,9 +40,9 @@
     font-size: 3vh; font-weight: 700; font-variant-numeric: tabular-nums; opacity: .85;
   }
 
-  /* アバター (SVG / PNG モード) */
+  /* アバター (SVG / PNG / パペット共通の置き場。バストアップを右下に配置) */
   #avatar-wrap {
-    position: absolute; right: 6vw; bottom: 9vh; width: 38vh; height: 52vh; z-index: 2;
+    position: absolute; right: 3vw; bottom: 0; width: 62vh; height: 78vh; z-index: 2;
   }
   #avatar-wrap svg, #avatar-wrap img { width: 100%; height: 100%; }
   #avatar-img { display: none; object-fit: contain; }
@@ -65,7 +65,7 @@
     background: linear-gradient(135deg, #ffe9a8, #ffd24d);
     box-shadow: 0 6px 34px rgba(255,200,60,.55);
   }
-  #comment-author { font-size: 2vh; font-weight: 700; color: var(--accent); }
+  #comment-author { font-size: 2vh; font-weight: 700; color: #7a4de0; }
   #comment-card.superchat #comment-author { color: #7a5200; }
   #comment-amount { font-size: 2vh; font-weight: 800; color: #b0093c; margin-left: 1vw; }
   #comment-text { font-size: 2.4vh; color: #222; margin-top: .8vh; line-height: 1.5; word-break: break-word; }
@@ -76,7 +76,7 @@
     width: 88vw; z-index: 4; display: flex; justify-content: center;
   }
   #subtitle {
-    background: rgba(15, 8, 40, .82); border: 2px solid rgba(180,140,242,.7);
+    background: rgba(15, 8, 40, .82); border: 2px solid rgba(255,138,92,.7);
     color: #fff; font-size: 3vh; line-height: 1.6; padding: 1.8vh 3vw;
     border-radius: 2vh; max-width: 100%;
     opacity: 0; transition: opacity .35s; box-shadow: 0 4px 24px rgba(0,0,0,.4);
@@ -96,47 +96,210 @@
   <canvas id="live2d-canvas"></canvas>
 
   <div id="avatar-wrap">
-    <!-- 自作の立ち絵を使う場合: avatar/avatar_closed.png と avatar/avatar_open.png を置くと自動で切り替わる -->
+    <!-- 立ち絵PNG2枚モード用 -->
     <img id="avatar-img" alt="avatar">
-    <svg id="avatar-svg" viewBox="0 0 400 560" xmlns="http://www.w3.org/2000/svg">
-      <!-- 体 (頭とは別に、呼吸で微妙に伸縮する) -->
-      <g id="body">
-        <path d="M120 400 C 120 360 160 340 200 340 C 240 340 280 360 280 400 L 292 540 L 108 540 Z" fill="#5b48a8"/>
-        <path d="M160 350 L 200 400 L 240 350 C 225 342 212 340 200 340 C 188 340 175 342 160 350 Z" fill="#fff"/>
-        <circle cx="200" cy="388" r="7" fill="#ffd24d"/>
-        <rect x="188" y="300" width="24" height="50" rx="10" fill="#ffdfc9"/>
+    <!-- 内蔵キャラ (アニメ調バストアップ / レイヤーごとにJSが毎フレーム動かす) -->
+    <svg id="avatar-svg" viewBox="0 0 500 640" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="hairG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#ffb45e"/>
+          <stop offset=".55" stop-color="#f79338"/>
+          <stop offset="1" stop-color="#e97a26"/>
+        </linearGradient>
+        <linearGradient id="hairBackG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#f19238"/>
+          <stop offset="1" stop-color="#d96f22"/>
+        </linearGradient>
+        <radialGradient id="irisG" cx=".5" cy=".38" r=".65">
+          <stop offset="0" stop-color="#7fd8d8"/>
+          <stop offset=".55" stop-color="#3aa3ad"/>
+          <stop offset="1" stop-color="#1c6472"/>
+        </radialGradient>
+        <radialGradient id="blushG" cx=".5" cy=".5" r=".5">
+          <stop offset="0" stop-color="#ff9a86" stop-opacity=".65"/>
+          <stop offset="1" stop-color="#ff9a86" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="dressG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#ee4d55"/>
+          <stop offset="1" stop-color="#d3363f"/>
+        </linearGradient>
+        <clipPath id="eyeClipL"><ellipse cx="183" cy="322" rx="34" ry="31"/></clipPath>
+        <clipPath id="eyeClipR"><ellipse cx="317" cy="322" rx="34" ry="31"/></clipPath>
+      </defs>
+
+      <!-- ===== 後ろ髪 (ボブ・頭より弱い視差で揺れる) ===== -->
+      <g id="back-hair">
+        <path fill="url(#hairBackG)" d="M250,88
+          C 152,88 94,166 96,262
+          C 97,324 104,374 92,416
+          C 100,450 136,464 170,458
+          C 188,454 192,440 188,418
+          C 180,382 177,352 178,330
+          L 322,330
+          C 323,352 320,382 312,418
+          C 308,440 312,454 330,458
+          C 364,464 400,450 408,416
+          C 396,374 403,324 404,262
+          C 406,166 348,88 250,88 Z"/>
+        <path fill="#c8621d" opacity=".3" d="M112,296 C 114,352 118,392 106,424 C 122,446 144,454 162,450 C 154,404 152,352 156,312 Z"/>
+        <path fill="#c8621d" opacity=".3" d="M388,296 C 386,352 382,392 394,424 C 378,446 356,454 338,450 C 346,404 348,352 344,312 Z"/>
       </g>
 
-      <!-- 頭全体 (傾き・上下は #head の transform をJSが毎フレーム更新) -->
+      <!-- ===== 体 (わずかに揺れる) ===== -->
+      <g id="body">
+        <!-- 首 -->
+        <path fill="#ffe3cd" d="M232,396 L268,396 L268,448 C 268,462 232,462 232,448 Z"/>
+        <path fill="#f3c4a6" d="M232,396 L268,396 L268,414 C 256,424 244,424 232,414 Z"/>
+        <!-- 胸元の白インナー -->
+        <path fill="#fff6ec" d="M220,442 L250,484 L280,442 L280,470 L220,470 Z"/>
+        <!-- ドレス -->
+        <path fill="url(#dressG)" stroke="#a32635" stroke-width="3" d="M250,434
+          C 198,436 164,454 146,490
+          C 128,526 120,578 116,640
+          L 384,640
+          C 380,578 372,526 354,490
+          C 336,454 302,436 250,434 Z"/>
+        <!-- パフスリーブ -->
+        <path fill="url(#dressG)" stroke="#a32635" stroke-width="3" d="M146,492 C 116,502 100,534 102,572 C 104,606 120,630 142,640 L 178,640 C 162,590 154,544 158,506 Z"/>
+        <path fill="url(#dressG)" stroke="#a32635" stroke-width="3" d="M354,492 C 384,502 400,534 398,572 C 396,606 380,630 358,640 L 322,640 C 338,590 346,544 342,506 Z"/>
+        <path fill="none" stroke="#f7c948" stroke-width="4" d="M108,610 C 124,626 148,636 166,638"/>
+        <path fill="none" stroke="#f7c948" stroke-width="4" d="M392,610 C 376,626 352,636 334,638"/>
+        <!-- セーラー風の襟 -->
+        <path fill="#cf3540" stroke="#a32635" stroke-width="3" d="M214,438
+          C 188,458 178,492 184,524 L 250,560 L 316,524
+          C 322,492 312,458 286,438
+          C 262,450 238,450 214,438 Z"/>
+        <path fill="none" stroke="#f7c948" stroke-width="3.5" d="M196,506 L 250,540 L 304,506"/>
+        <path fill="none" stroke="#f7c948" stroke-width="3.5" d="M192,486 L 250,522 L 308,486"/>
+        <!-- 胸元のリボン -->
+        <path fill="#e23c46" stroke="#b02733" stroke-width="3" d="M250,556 C 222,530 188,538 190,564 C 192,588 228,592 250,556 Z"/>
+        <path fill="#e23c46" stroke="#b02733" stroke-width="3" d="M250,556 C 278,530 312,538 310,564 C 308,588 272,592 250,556 Z"/>
+        <path fill="#e23c46" stroke="#b02733" stroke-width="3" d="M239,584 C 232,604 234,620 242,634 L 258,634 C 266,620 268,604 261,584 Z"/>
+        <circle cx="250" cy="560" r="13" fill="#f2b23c" stroke="#c98a1e" stroke-width="3"/>
+        <circle cx="250" cy="560" r="4.5" fill="#fff3d6"/>
+      </g>
+
+      <!-- ===== 頭 (傾き・揺れの本体) ===== -->
       <g id="head">
-        <!-- 後ろ髪 -->
-        <path d="M200 60 C 90 60 60 170 65 270 C 68 350 55 420 85 455 L 130 430 L 120 320 L 280 320 L 270 430 L 315 455 C 345 420 332 350 335 270 C 340 170 310 60 200 60 Z" fill="#7a5fc0"/>
         <!-- 顔 -->
-        <ellipse cx="200" cy="220" rx="105" ry="110" fill="#ffe6d3"/>
-        <!-- 前髪 -->
-        <path d="M200 80 C 110 80 90 160 95 205 C 120 195 135 150 145 140 C 150 160 165 170 200 170 C 235 170 250 160 255 140 C 265 150 280 195 305 205 C 310 160 290 80 200 80 Z" fill="#8a6fd0"/>
-        <!-- サイドの髪 -->
-        <path d="M95 200 C 82 240 84 288 96 320 C 108 300 112 250 112 220 Z" fill="#8a6fd0"/>
-        <path d="M305 200 C 318 240 316 288 304 320 C 292 300 288 250 288 220 Z" fill="#8a6fd0"/>
-        <!-- ヘッドホン -->
-        <path d="M85 195 C 85 110 315 110 315 195" fill="none" stroke="#332355" stroke-width="14" stroke-linecap="round"/>
-        <rect x="72" y="185" width="30" height="60" rx="14" fill="#332355"/>
-        <rect x="298" y="185" width="30" height="60" rx="14" fill="#332355"/>
-        <circle cx="87" cy="215" r="7" fill="var(--accent, #b48cf2)"/>
-        <circle cx="313" cy="215" r="7" fill="var(--accent, #b48cf2)"/>
-        <!-- 眉 (角度・高さをJSが更新) -->
-        <path id="brow-l" d="M143 194 Q 160 187 177 194" fill="none" stroke="#6a4fb0" stroke-width="5" stroke-linecap="round"/>
-        <path id="brow-r" d="M223 194 Q 240 187 257 194" fill="none" stroke="#6a4fb0" stroke-width="5" stroke-linecap="round"/>
-        <!-- 目 (開き具合 = ry をJSが更新) -->
-        <ellipse id="eye-l" cx="160" cy="228" rx="13" ry="18" fill="#3a2a55"/>
-        <ellipse id="eye-r" cx="240" cy="228" rx="13" ry="18" fill="#3a2a55"/>
-        <circle id="hl-l" cx="164" cy="221" r="4.5" fill="#fff"/>
-        <circle id="hl-r" cx="244" cy="221" r="4.5" fill="#fff"/>
-        <!-- 頬 (感情で濃さが変わる) -->
-        <ellipse id="blush-l" cx="138" cy="260" rx="14" ry="8" fill="#ffb9b0" opacity=".4"/>
-        <ellipse id="blush-r" cx="262" cy="260" rx="14" ry="8" fill="#ffb9b0" opacity=".4"/>
-        <!-- 口 (開き・口角をJSがパスごと再計算) -->
-        <path id="mouth" d="" fill="#a3423a" stroke="#c96a5e" stroke-width="3" stroke-linejoin="round"/>
+        <path fill="#ffe9da" d="M141,252
+          C 143,324 170,386 228,404
+          C 242,409 258,409 272,404
+          C 330,386 357,324 359,252
+          C 358,170 312,126 250,126
+          C 188,126 142,170 141,252 Z"/>
+
+        <!-- 表情パーツ (頭の中でさらに視差) -->
+        <g id="features">
+          <!-- 左目 -->
+          <g id="eye-l-group">
+            <ellipse cx="183" cy="322" rx="34" ry="31" fill="#fff"/>
+            <g clip-path="url(#eyeClipL)">
+              <g id="iris-l">
+                <circle cx="183" cy="325" r="26" fill="url(#irisG)"/>
+                <circle cx="183" cy="325" r="26" fill="none" stroke="#14505c" stroke-width="3"/>
+                <circle cx="183" cy="327" r="11" fill="#123842"/>
+                <circle cx="173" cy="312" r="9" fill="#fff"/>
+                <circle cx="193" cy="336" r="4.5" fill="#d6fbf7" opacity=".9"/>
+                <path d="M165,334 A 19 19 0 0 0 201 334" fill="none" stroke="#8fe3da" stroke-width="4" opacity=".6"/>
+              </g>
+              <rect id="lid-l" x="145" y="262" width="76" height="31" fill="#ffe9da"/>
+            </g>
+            <!-- まつ毛 -->
+            <path d="M147,304 C 158,285 208,283 220,304" fill="none" stroke="#472430" stroke-width="9" stroke-linecap="round"/>
+            <path d="M147,304 C 143,308 140,314 139,320" fill="none" stroke="#472430" stroke-width="6" stroke-linecap="round"/>
+            <path d="M220,304 C 223,308 225,313 226,318" fill="none" stroke="#472430" stroke-width="5" stroke-linecap="round"/>
+            <path d="M158,350 C 169,357 197,357 208,350" fill="none" stroke="#e8a08e" stroke-width="3.5" stroke-linecap="round"/>
+          </g>
+
+          <!-- 右目 -->
+          <g id="eye-r-group">
+            <ellipse cx="317" cy="322" rx="34" ry="31" fill="#fff"/>
+            <g clip-path="url(#eyeClipR)">
+              <g id="iris-r">
+                <circle cx="317" cy="325" r="26" fill="url(#irisG)"/>
+                <circle cx="317" cy="325" r="26" fill="none" stroke="#14505c" stroke-width="3"/>
+                <circle cx="317" cy="327" r="11" fill="#123842"/>
+                <circle cx="307" cy="312" r="9" fill="#fff"/>
+                <circle cx="327" cy="336" r="4.5" fill="#d6fbf7" opacity=".9"/>
+                <path d="M299,334 A 19 19 0 0 0 335 334" fill="none" stroke="#8fe3da" stroke-width="4" opacity=".6"/>
+              </g>
+              <rect id="lid-r" x="279" y="262" width="76" height="31" fill="#ffe9da"/>
+            </g>
+            <path d="M280,304 C 292,283 342,285 353,304" fill="none" stroke="#472430" stroke-width="9" stroke-linecap="round"/>
+            <path d="M353,304 C 357,308 360,314 361,320" fill="none" stroke="#472430" stroke-width="6" stroke-linecap="round"/>
+            <path d="M280,304 C 277,308 275,313 274,318" fill="none" stroke="#472430" stroke-width="5" stroke-linecap="round"/>
+            <path d="M292,350 C 303,357 331,357 342,350" fill="none" stroke="#e8a08e" stroke-width="3.5" stroke-linecap="round"/>
+          </g>
+
+          <!-- 鼻 -->
+          <path d="M249,358 q 4,4 1,8" fill="none" stroke="#e8a284" stroke-width="3" stroke-linecap="round"/>
+
+          <!-- 頬 -->
+          <ellipse id="blush-l" cx="158" cy="356" rx="26" ry="14" fill="url(#blushG)"/>
+          <ellipse id="blush-r" cx="342" cy="356" rx="26" ry="14" fill="url(#blushG)"/>
+
+          <!-- 口 (JSがパスを毎フレーム再計算) -->
+          <path id="mouth" d="" fill="#93323f" stroke="#6e222d" stroke-width="3" stroke-linejoin="round"/>
+        </g>
+
+        <!-- ===== 前髪 (目の上まで・丸みのある房。頭より少し遅れて追従) ===== -->
+        <g id="front-hair">
+          <path fill="url(#hairG)" stroke="#cf6a1d" stroke-width="3" stroke-linejoin="round" d="M250,84
+            C 158,84 112,138 108,214
+            C 106,252 110,280 122,300
+            C 128,308 134,306 138,296
+            L 148,272
+            C 156,296 162,308 170,314
+            C 178,319 184,314 188,304
+            L 196,278
+            C 204,300 210,308 216,311
+            C 224,315 230,310 235,298
+            L 243,274
+            C 250,300 256,314 262,318
+            C 270,322 276,315 281,301
+            L 288,276
+            C 296,298 302,306 308,309
+            C 316,313 322,308 327,296
+            L 335,272
+            C 342,296 348,308 356,313
+            C 364,317 370,312 374,302
+            C 382,286 390,258 392,214
+            C 388,138 342,84 250,84 Z"/>
+          <!-- 髪のハイライト -->
+          <path fill="none" stroke="#ffd9a0" stroke-width="8" stroke-linecap="round" opacity=".65"
+            d="M154,192 C 186,166 314,166 346,192"/>
+          <path fill="none" stroke="#ffd9a0" stroke-width="5" stroke-linecap="round" opacity=".5"
+            d="M170,214 C 200,194 300,194 330,214"/>
+          <!-- サイドの髪 (顔に沿って流れる) -->
+          <path fill="url(#hairG)" stroke="#cf6a1d" stroke-width="3" d="M116,226
+            C 108,266 112,318 128,364
+            C 134,380 145,382 150,368
+            C 158,342 158,304 154,276
+            C 151,250 142,234 130,224 Z"/>
+          <path fill="url(#hairG)" stroke="#cf6a1d" stroke-width="3" d="M384,226
+            C 392,266 388,318 372,364
+            C 366,380 355,382 350,368
+            C 342,342 342,304 346,276
+            C 349,250 358,234 370,224 Z"/>
+        </g>
+
+        <!-- 眉 (アニメの透け眉: 前髪の上に描く) -->
+        <g id="brows">
+          <path id="brow-l" d="M154,293 Q 183,279 212,295" fill="none" stroke="#a8541a" stroke-width="6.5" stroke-linecap="round"/>
+          <path id="brow-r" d="M288,295 Q 317,279 346,293" fill="none" stroke="#a8541a" stroke-width="6.5" stroke-linecap="round"/>
+        </g>
+
+        <!-- ===== リボン ===== -->
+        <g id="ribbon" transform="translate(360,130) rotate(12) scale(1.15)">
+          <path fill="#e23c46" stroke="#b02733" stroke-width="3.5" stroke-linejoin="round"
+            d="M0,0 C -40,-30 -80,-16 -72,14 C -64,40 -20,34 0,0 Z"/>
+          <path fill="#e23c46" stroke="#b02733" stroke-width="3.5" stroke-linejoin="round"
+            d="M0,0 C 34,-38 76,-32 74,-2 C 72,26 26,30 0,0 Z"/>
+          <path fill="none" stroke="#b02733" stroke-width="3" d="M-52,2 C -44,8 -32,10 -20,6"/>
+          <path fill="none" stroke="#b02733" stroke-width="3" d="M50,-14 C 44,-6 34,-2 22,-2"/>
+          <circle cx="0" cy="0" r="12" fill="#c9303c" stroke="#b02733" stroke-width="3"/>
+        </g>
       </g>
     </svg>
   </div>
@@ -161,37 +324,33 @@
   tick(); setInterval(tick, 5000);
 
   // =====================================================================
-  //  表情パラメータリグ
-  //  すべて連続値。目標値(target)へ毎フレーム指数補間するため、
-  //  感情の切り替わりも口パクもコマ送りにならず滑らかに変化する。
+  //  表情パラメータリグ (連続値を毎フレーム指数補間 → コマ送りにならない)
   // =====================================================================
-  const P = {  // 現在値
+  const P = {
     mouth: 0,      // 口の開き 0..1 (音声エンベロープ駆動)
-    smile: 0.3,    // 口角 -1(への字)..1(にっこり)
-    eyeOpen: 1,    // 目の開き 0..1.3 (1超=見開き)
+    smile: 0.35,   // 口角 -1(への字)..1(にっこり)
+    eyeOpen: 1,    // 目の開き 0..1.15
     browY: 0,      // 眉の高さ -8(上げ)..6(下げ) px
     browAngle: 0,  // 眉の角度 -1(困り)..1(怒り)
-    blush: 0.35,   // 頬の赤み 0..1
+    blush: 0.4,    // 頬の赤み 0..1
     tilt: 0,       // 首の傾き deg
     lookX: 0,      // 視線 -1..1
   };
-  const T = { ...P };  // 目標値
+  const T = { ...P };
 
   const EMOTIONS = {
-    neutral:   { smile: 0.3,  eyeOpen: 1.0,  browY: 0,  browAngle: 0,    blush: 0.35, tilt: 0,  lookX: 0 },
-    happy:     { smile: 1.0,  eyeOpen: 0.82, browY: -2, browAngle: 0,    blush: 0.7,  tilt: 3,  lookX: 0 },
-    sad:       { smile: -0.6, eyeOpen: 0.6,  browY: 2,  browAngle: -1,   blush: 0.25, tilt: -3, lookX: -0.3 },
-    angry:     { smile: -0.4, eyeOpen: 0.85, browY: 3,  browAngle: 1,    blush: 0.3,  tilt: 0,  lookX: 0 },
-    surprised: { smile: 0.1,  eyeOpen: 1.3,  browY: -7, browAngle: 0,    blush: 0.45, tilt: 0,  lookX: 0 },
+    neutral:   { smile: 0.35, eyeOpen: 1.0,  browY: 0,  browAngle: 0,    blush: 0.4,  tilt: 0,  lookX: 0 },
+    happy:     { smile: 1.0,  eyeOpen: 0.8,  browY: -2, browAngle: 0,    blush: 0.75, tilt: 3,  lookX: 0 },
+    sad:       { smile: -0.6, eyeOpen: 0.6,  browY: 2,  browAngle: -1,   blush: 0.3,  tilt: -3, lookX: -0.3 },
+    angry:     { smile: -0.4, eyeOpen: 0.85, browY: 3,  browAngle: 1,    blush: 0.35, tilt: 0,  lookX: 0 },
+    surprised: { smile: 0.15, eyeOpen: 1.15, browY: -7, browAngle: 0,    blush: 0.5,  tilt: 0,  lookX: 0 },
     shy:       { smile: 0.5,  eyeOpen: 0.7,  browY: 1,  browAngle: -0.5, blush: 1.0,  tilt: 4,  lookX: 0.6 },
   };
 
-  let emotion = "neutral";
   let emotionTimer = null;
   const setEmotion = (name, holdMs = 8000) => {
-    if (!EMOTIONS[name]) name = "neutral";
-    emotion = name;
-    Object.assign(T, EMOTIONS[name]);
+    const preset = EMOTIONS[name] || EMOTIONS.neutral;
+    Object.assign(T, preset);
     clearTimeout(emotionTimer);
     if (name !== "neutral") {
       emotionTimer = setTimeout(() => setEmotion("neutral"), holdMs);
@@ -204,14 +363,13 @@
     if (!speaking || !envelope || envelope.length === 0) return 0;
     const pos = (now - envStart) / envFrameMs;
     const i = Math.floor(pos);
-    if (i < 0) return 0;
-    if (i >= envelope.length) return 0;
+    if (i < 0 || i >= envelope.length) return 0;
     const a = envelope[i] / 100;
     const b = (envelope[i + 1] ?? 0) / 100;
     return a + (b - a) * (pos - i);
   };
 
-  // ---- まばたき (連続値: blink 0..1 を高速補間) ----
+  // ---- まばたき ----
   let blink = 0, blinkTarget = 0;
   const scheduleBlink = () => {
     blinkTarget = 1;
@@ -221,54 +379,126 @@
   setTimeout(scheduleBlink, 2000);
 
   // =====================================================================
-  //  レンダラ: Live2D > PNG立ち絵 > 内蔵SVG の優先順で自動選択
+  //  レンダラ: Live2D > レイヤードPNGパペット > PNG立ち絵2枚 > 内蔵SVG
   // =====================================================================
 
-  // ---- SVGレンダラ ----
+  // ---- 内蔵SVGレンダラ (レイヤーごとの視差 + 髪の追従で立体感を出す) ----
   const svgRenderer = (() => {
     const el = {
-      head: $("head"),
-      body: $("body"),
-      eyeL: $("eye-l"), eyeR: $("eye-r"),
-      hlL: $("hl-l"), hlR: $("hl-r"),
+      head: $("head"), backHair: $("back-hair"), frontHair: $("front-hair"),
+      body: $("body"), features: $("features"),
+      brows: $("brows"),
+      eyeL: $("eye-l-group"), eyeR: $("eye-r-group"),
+      irisL: $("iris-l"), irisR: $("iris-r"),
+      lidL: $("lid-l"), lidR: $("lid-r"),
       browL: $("brow-l"), browR: $("brow-r"),
       blushL: $("blush-l"), blushR: $("blush-r"),
       mouth: $("mouth"),
     };
+    let hairLag = 0;
     const mouthPath = (open, smile) => {
-      const cx = 200, cy = 282, w = 17;
-      const lift = smile * 8;                 // 口角の上がり(下がり)
-      const gap = 1.5 + open * 26;            // 開き具合
-      const top = cy - gap * 0.3;
-      const bottom = cy + gap * 0.7;
+      const cx = 250, cy = 384, w = 21;
+      const lift = smile * 9;
+      const gap = 2 + open * 30;
+      const top = cy - gap * 0.28;
+      const bottom = cy + gap * 0.72;
       return `M ${cx - w} ${cy - lift} Q ${cx} ${top} ${cx + w} ${cy - lift} ` +
-             `Q ${cx} ${bottom + lift * 0.5} ${cx - w} ${cy - lift} Z`;
+             `Q ${cx} ${bottom + lift * 0.4} ${cx - w} ${cy - lift} Z`;
     };
     return (p, t) => {
-      // 呼吸 + 首の傾き
-      const breath = Math.sin(t / 1700) * 4;
+      // アイドル時の自然な揺れ (複数周期のサインを合成)
+      const swayX = Math.sin(t * 0.00042) * 5 + Math.sin(t * 0.00013) * 3;
+      const breath = Math.sin(t / 1700) * 5;
+      const tilt = p.tilt + Math.sin(t * 0.00023) * 1.1;
+
+      // 前髪は頭の動きに少し遅れて追従 (フォロースルー)
+      hairLag += (swayX - hairLag) * 0.06;
+
       el.head.setAttribute("transform",
-        `translate(0 ${breath}) rotate(${p.tilt} 200 260)`);
-      el.body.setAttribute("transform", `translate(0 ${breath * 0.35})`);
-      // 目
-      const openNow = Math.max(0.05, p.eyeOpen * (1 - blink));
-      el.eyeL.setAttribute("ry", 18 * openNow);
-      el.eyeR.setAttribute("ry", 18 * openNow);
-      el.hlL.style.opacity = el.hlR.style.opacity = openNow > 0.4 ? 1 : 0;
-      el.hlL.setAttribute("cx", 164 + p.lookX * 5);
-      el.hlR.setAttribute("cx", 244 + p.lookX * 5);
+        `translate(${swayX} ${breath}) rotate(${tilt} 250 380)`);
+      el.backHair.setAttribute("transform",
+        `translate(${swayX * 0.55 + (hairLag - swayX) * 0.8} ${breath * 0.7}) rotate(${tilt * 0.7} 250 380)`);
+      el.body.setAttribute("transform",
+        `translate(${swayX * 0.25} ${breath * 0.35}) rotate(${tilt * 0.15} 250 640)`);
+      const featShift = `translate(${swayX * 0.35 + p.lookX * 3} 0)`;
+      el.features.setAttribute("transform", featShift);
+      el.brows.setAttribute("transform", featShift);
+      el.frontHair.setAttribute("transform",
+        `translate(${(hairLag - swayX) * 0.7} 0)`);
+
+      // 目: まぶた(肌色の板)が上から降りてくる + 全体をわずかに縦圧縮
+      const openNow = Math.max(0.04, Math.min(1.15, p.eyeOpen * (1 - blink)));
+      const lidDrop = (1 - Math.min(1, openNow)) * 62;
+      el.lidL.setAttribute("transform", `translate(0 ${lidDrop})`);
+      el.lidR.setAttribute("transform", `translate(0 ${lidDrop})`);
+      const squash = 0.85 + Math.min(1, openNow) * 0.15 + Math.max(0, openNow - 1) * 0.5;
+      el.eyeL.setAttribute("transform", `matrix(1 0 0 ${squash} 0 ${322 * (1 - squash)})`);
+      el.eyeR.setAttribute("transform", `matrix(1 0 0 ${squash} 0 ${322 * (1 - squash)})`);
+      // 視線
+      el.irisL.setAttribute("transform", `translate(${p.lookX * 7} 0)`);
+      el.irisR.setAttribute("transform", `translate(${p.lookX * 7} 0)`);
       // 眉
       el.browL.setAttribute("transform",
-        `translate(0 ${p.browY}) rotate(${ p.browAngle * 12} 160 194)`);
+        `translate(0 ${p.browY}) rotate(${ p.browAngle * 11} 183 274)`);
       el.browR.setAttribute("transform",
-        `translate(0 ${p.browY}) rotate(${-p.browAngle * 12} 240 194)`);
+        `translate(0 ${p.browY}) rotate(${-p.browAngle * 11} 317 274)`);
       // 頬
-      el.blushL.setAttribute("opacity", 0.15 + p.blush * 0.65);
-      el.blushR.setAttribute("opacity", 0.15 + p.blush * 0.65);
+      el.blushL.style.opacity = 0.25 + p.blush * 0.75;
+      el.blushR.style.opacity = 0.25 + p.blush * 0.75;
       // 口
       el.mouth.setAttribute("d", mouthPath(p.mouth, p.smile));
     };
   })();
+
+  // ---- レイヤードPNGパペット (自作イラストをLive2D風に動かす) ----
+  // avatar/puppet/puppet.json を置くと有効になる。詳細はREADME参照。
+  let puppet = null;
+  const setupPuppet = async () => {
+    let spec;
+    try {
+      const r = await fetch("/static/puppet/puppet.json");
+      if (!r.ok) return false;
+      spec = await r.json();
+    } catch (e) { return false; }
+    $("avatar-svg").style.display = "none";
+    const cont = document.createElement("div");
+    cont.style.cssText = "position:absolute;inset:0;";
+    $("avatar-wrap").appendChild(cont);
+    const layers = [];
+    for (const l of spec.layers || []) {
+      const img = document.createElement("img");
+      img.src = "/static/puppet/" + l.src;
+      img.style.cssText =
+        "position:absolute;inset:0;width:100%;height:100%;object-fit:contain;will-change:transform,opacity;";
+      cont.appendChild(img);
+      layers.push({
+        el: img,
+        head: !!l.head,
+        depth: l.depth ?? (l.head ? 0.1 : 0),
+        role: l.role || "",
+      });
+    }
+    puppet = { layers };
+    return true;
+  };
+  const puppetRenderer = (p, t) => {
+    const swayX = Math.sin(t * 0.00042) * 8 + Math.sin(t * 0.00013) * 5;
+    const breath = Math.sin(t / 1700) * 6;
+    const tilt = p.tilt + Math.sin(t * 0.00023) * 1.1;
+    const openNow = Math.max(0, Math.min(1, p.eyeOpen * (1 - blink)));
+    for (const L of puppet.layers) {
+      const k = L.head ? 1 : 0.35;
+      const dx = swayX * (k + L.depth) + (L.head ? p.lookX * 4 * (1 + L.depth) : 0);
+      const dy = breath * (k * 0.8 + L.depth * 0.4);
+      const rot = tilt * (L.head ? 1 + L.depth * 0.5 : 0.25);
+      L.el.style.transform = `translate(${dx}px, ${dy}px) rotate(${rot}deg)`;
+      // 口・目はレイヤーのクロスフェードで滑らかに切り替える
+      if (L.role === "mouth_open") L.el.style.opacity = p.mouth;
+      else if (L.role === "mouth_closed") L.el.style.opacity = 1 - p.mouth;
+      else if (L.role === "eyes_open") L.el.style.opacity = openNow;
+      else if (L.role === "eyes_closed") L.el.style.opacity = 1 - openNow;
+    }
+  };
 
   // ---- PNG立ち絵レンダラ (2枚切り替え: 素材の制約上ここだけ2値) ----
   let pngMode = false;
@@ -302,7 +532,6 @@
       width: window.innerWidth, height: window.innerHeight,
     });
     const model = await PIXI.live2d.Live2DModel.from(modelUrl, { autoInteract: false });
-    // 画面右側・下寄せに配置
     const scale = (window.innerHeight * 0.85) / model.height;
     model.scale.set(scale);
     model.anchor.set(0.5, 1);
@@ -310,7 +539,6 @@
     app.stage.addChild(model);
     live2dModel = model;
 
-    // モデル更新の後に毎フレームパラメータを上書きする
     const set = (id, v) => {
       try { model.internalModel.coreModel.setParameterValueById(id, v); } catch (e) {}
     };
@@ -329,44 +557,46 @@
       set("ParamBrowRAngle", -P.browAngle * 0.8);
       set("ParamCheek", P.blush);
     });
-    // モデルが表情定義を持っていれば感情名で切り替えも試みる
     window.__applyExpression = (name) => {
       try { model.expression(name); } catch (e) {}
     };
   };
 
   // レンダラ選択
-  fetch("/config").then((r) => r.json()).then((cfg) => {
+  fetch("/config").then((r) => r.json()).then(async (cfg) => {
     if (cfg.live2d_model) {
-      setupLive2D(cfg.live2d_model).catch((e) => {
-        console.error("Live2D初期化失敗。SVGにフォールバックします:", e);
+      try {
+        await setupLive2D(cfg.live2d_model);
+        return;
+      } catch (e) {
+        console.error("Live2D初期化失敗。次のモードにフォールバックします:", e);
         $("live2d-canvas").style.display = "none";
         $("avatar-wrap").style.display = "";
-      });
-    } else {
-      fetch(imgClosed, { method: "HEAD" }).then((r) => {
-        if (!r.ok) return;
-        return fetch(imgOpen, { method: "HEAD" }).then((r2) => {
-          if (!r2.ok) return;
-          pngMode = true;
-          $("avatar-svg").style.display = "none";
-          const img = $("avatar-img");
-          img.src = imgClosed;
-          img.style.display = "block";
-        });
-      }).catch(() => {});
+      }
     }
+    if (await setupPuppet()) return;
+    try {
+      const r1 = await fetch(imgClosed, { method: "HEAD" });
+      const r2 = await fetch(imgOpen, { method: "HEAD" });
+      if (r1.ok && r2.ok) {
+        pngMode = true;
+        $("avatar-svg").style.display = "none";
+        const img = $("avatar-img");
+        img.src = imgClosed;
+        img.style.display = "block";
+      }
+    } catch (e) {}
   }).catch(() => {});
 
   // =====================================================================
-  //  メインループ: 目標値への指数補間 (口は速く、表情はゆっくり)
+  //  メインループ
   // =====================================================================
   let lastT = performance.now();
   const loop = (now) => {
     const dt = Math.min(0.1, (now - lastT) / 1000);
     lastT = now;
-    const fast = 1 - Math.exp(-dt * 22);   // 口・まばたき用
-    const slow = 1 - Math.exp(-dt * 7);    // 表情用
+    const fast = 1 - Math.exp(-dt * 22);
+    const slow = 1 - Math.exp(-dt * 7);
 
     T.mouth = mouthTarget(now);
     P.mouth += (T.mouth - P.mouth) * fast;
@@ -377,6 +607,8 @@
 
     if (live2dModel) {
       // Live2Dはticker側で反映済み
+    } else if (puppet) {
+      puppetRenderer(P, now);
     } else if (pngMode) {
       pngRenderer(P);
     } else {

@@ -129,9 +129,31 @@ systemctl --user enable radio.target
    LIVE2D_MODEL=live2d/hiyori/hiyori.model3.json
    ```
    pixi-live2d-display で描画し、`ParamMouthOpenY` `ParamEyeLOpen` `ParamAngleZ` などの標準パラメータを上記のリグで駆動します。モデルに表情(.exp3.json)が定義されていれば感情名(happy等)での切り替えも試みます。
+   モデルの入手先の例: [Live2D公式サンプルモデル集](https://www.live2d.com/learn/sample/)(桃瀬ひより等が無償配布)、BOOTHなどの販売モデル、Live2D Cubism Editorでの自作。ライセンス条件は各モデルの規約に従ってください。
    ※ Cubism CoreはLive2D公式CDNから実行時にロードするため、OBSのブラウザソースがインターネットに出られる必要があります(ライセンス上リポジトリに同梱できないため)
-2. **PNG立ち絵** — `avatar/avatar_closed.png` / `avatar_open.png` の2枚を置くと使われます(素材の制約上、口パクのみ2値)
-3. **内蔵SVGキャラ** — 何も置かなくても動く既定モード。上記パラメータをすべてSVGの形状に反映(口のパスは開き+口角から毎フレーム再計算)
+2. **レイヤードPNGパペット(自作イラスト向けの推奨ルート)** — お気に入りの絵柄のイラスト(自作・依頼・AI生成)をレイヤー分割したPNG群を `avatar/puppet/` に置くと、Live2D Editor なしでLive2D風に動きます。視差・首の傾き・呼吸・髪の揺れに加え、目と口は**opacityクロスフェード**で滑らかに切り替わります。
+
+   `avatar/puppet/puppet.json` の例:
+   ```json
+   {
+     "layers": [
+       {"src": "back_hair.png",    "depth": -0.3},
+       {"src": "body.png"},
+       {"src": "face.png",         "head": true},
+       {"src": "eyes_open.png",    "head": true, "role": "eyes_open"},
+       {"src": "eyes_closed.png",  "head": true, "role": "eyes_closed"},
+       {"src": "mouth_closed.png", "head": true, "role": "mouth_closed"},
+       {"src": "mouth_open.png",   "head": true, "role": "mouth_open"},
+       {"src": "front_hair.png",   "head": true, "depth": 0.15}
+     ]
+   }
+   ```
+   - 各PNGは**同じキャンバスサイズ**で透過書き出し(Krita/Photoshop/CLIP STUDIOのレイヤー書き出しでOK)
+   - `head: true` = 頭と一緒に傾く・揺れる / 省略 = 体(揺れ弱め)
+   - `depth` = 視差の強さ(奥は負、手前は正。前髪 0.1〜0.2 が目安)
+   - `role` = `eyes_open` `eyes_closed` `mouth_open` `mouth_closed` の4種。リップシンクとまばたきがクロスフェード駆動される
+3. **PNG立ち絵** — `avatar/avatar_closed.png` / `avatar_open.png` の2枚だけでも動きます(素材の制約上、口パクのみ2値)
+4. **内蔵SVGキャラ** — 何も置かなくても動く既定モード。アニメ調バストアップのキャラを多層レイヤー(後ろ髪/体/顔/表情/前髪/リボン)で持ち、視差・髪の追従(フォロースルー)・呼吸・複数周期の自然な揺れ・透け眉を実装。口のパスは開き+口角から毎フレーム再計算されます
 
 レイアウトや配色は `avatar/index.html` を直接編集してください。
 確認はローカルで `http://127.0.0.1:8500/` を開くだけです(SSHポートフォワード可)。
