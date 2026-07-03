@@ -21,6 +21,9 @@ avatar/avatar_closed.png
 # Live2Dモデル (各自で配置する)
 avatar/live2d/
 
+# パペットのレイヤーPNG (各自で配置する)
+avatar/puppet/
+
 # IDE / OS
 .vscode/
 .idea/

@@ -122,7 +122,7 @@ systemctl --user enable radio.target
 - **リップシンク**: VOICEVOXが生成したWAVからサーバ側で音量エンベロープ(50ms刻み)を抽出し、実際の音声に同期して口の開き具合が連続的に追従します
 - **感情表現**: LLMが返答の先頭に感情タグ(`[happy]` `[sad]` `[angry]` `[surprised]` `[shy]`)を付け、それに応じて表情プリセットへ滑らかに遷移します(タグは読み上げ・字幕から除去)。一定時間後にneutralへ自然に戻ります
 
-描画は次の優先順で自動選択されます:
+描画は次の優先順で自動選択されます。**メインはレイヤードPNGパペット**で、アセット未設定のあいだは画面に案内プレースホルダーが表示されます(音声のみで配信自体は動きます)。
 
 1. **Live2D** — `avatar/live2d/` にCubismモデル一式を置き、`.env` で指定:
    ```
@@ -131,7 +131,7 @@ systemctl --user enable radio.target
    pixi-live2d-display で描画し、`ParamMouthOpenY` `ParamEyeLOpen` `ParamAngleZ` などの標準パラメータを上記のリグで駆動します。モデルに表情(.exp3.json)が定義されていれば感情名(happy等)での切り替えも試みます。
    モデルの入手先の例: [Live2D公式サンプルモデル集](https://www.live2d.com/learn/sample/)(桃瀬ひより等が無償配布)、BOOTHなどの販売モデル、Live2D Cubism Editorでの自作。ライセンス条件は各モデルの規約に従ってください。
    ※ Cubism CoreはLive2D公式CDNから実行時にロードするため、OBSのブラウザソースがインターネットに出られる必要があります(ライセンス上リポジトリに同梱できないため)
-2. **レイヤードPNGパペット(自作イラスト向けの推奨ルート)** — お気に入りの絵柄のイラスト(自作・依頼・AI生成)をレイヤー分割したPNG群を `avatar/puppet/` に置くと、Live2D Editor なしでLive2D風に動きます。視差・首の傾き・呼吸・髪の揺れに加え、目と口は**opacityクロスフェード**で滑らかに切り替わります。
+2. **レイヤードPNGパペット(メインの描画モード)** — お気に入りの絵柄のイラスト(自作・依頼・AI生成)をレイヤー分割したPNG群を `avatar/puppet/` に置くと、Live2D Editor なしでLive2D風に動きます。視差・首の傾き・呼吸・髪の揺れに加え、目・口・感情差分は**opacityクロスフェード**で滑らかに切り替わります。
 
    `avatar/puppet/puppet.json` の例:
    ```json
@@ -144,6 +144,9 @@ systemctl --user enable radio.target
        {"src": "eyes_closed.png",  "head": true, "role": "eyes_closed"},
        {"src": "mouth_closed.png", "head": true, "role": "mouth_closed"},
        {"src": "mouth_open.png",   "head": true, "role": "mouth_open"},
+       {"src": "blush.png",        "head": true, "role": "blush"},
+       {"src": "tears.png",        "head": true, "emotion": "sad"},
+       {"src": "sparkle_eyes.png", "head": true, "emotion": "happy"},
        {"src": "front_hair.png",   "head": true, "depth": 0.15}
      ]
    }
@@ -151,9 +154,24 @@ systemctl --user enable radio.target
    - 各PNGは**同じキャンバスサイズ**で透過書き出し(Krita/Photoshop/CLIP STUDIOのレイヤー書き出しでOK)
    - `head: true` = 頭と一緒に傾く・揺れる / 省略 = 体(揺れ弱め)
    - `depth` = 視差の強さ(奥は負、手前は正。前髪 0.1〜0.2 が目安)
-   - `role` = `eyes_open` `eyes_closed` `mouth_open` `mouth_closed` の4種。リップシンクとまばたきがクロスフェード駆動される
+   - `role` = `eyes_open` `eyes_closed` `mouth_open` `mouth_closed` `blush` — リップシンク・まばたき・頬の赤みをクロスフェードで駆動
+   - `emotion` = `happy` `sad` `angry` `surprised` `shy` — その感情のときだけフェードインする差分レイヤー(涙・目の輝き・怒りマーク等)。LLMの感情タグと連動します
+   - 最低構成は `face.png`(全身1枚でも可) + `mouth_open/closed` の3枚。目や差分は後から足せます
+
+   配置後はチェックツールで検証できます:
+   ```bash
+   python3 scripts/validate_puppet.py
+   ```
 3. **PNG立ち絵** — `avatar/avatar_closed.png` / `avatar_open.png` の2枚だけでも動きます(素材の制約上、口パクのみ2値)
-4. **内蔵SVGキャラ** — 何も置かなくても動く既定モード。アニメ調バストアップのキャラを多層レイヤー(後ろ髪/体/顔/表情/前髪/リボン)で持ち、視差・髪の追従(フォロースルー)・呼吸・複数周期の自然な揺れ・透け眉を実装。口のパスは開き+口角から毎フレーム再計算されます
+
+### イラストからレイヤーを作る手順の例
+
+1. バストアップのイラストを用意する(推奨 1024x1024 以上の正方形〜縦長)
+2. Krita / CLIP STUDIO / Photoshop でパーツごとにレイヤー分けする
+   (後ろ髪 / 体 / 顔(目と口を消したもの) / 開いた目 / 閉じた目 / 開いた口 / 閉じた口 / 前髪)
+3. **キャンバスサイズのまま**各レイヤーを個別に透過PNG書き出しする
+4. `avatar/puppet/` に置いて `puppet.json` を書き、`validate_puppet.py` で確認
+5. ブラウザで `http://127.0.0.1:8500/` を開いて動きを確認(SSHポートフォワード可)
 
 レイアウトや配色は `avatar/index.html` を直接編集してください。
 確認はローカルで `http://127.0.0.1:8500/` を開くだけです(SSHポートフォワード可)。
