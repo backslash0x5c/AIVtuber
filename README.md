@@ -115,17 +115,25 @@ systemctl --user enable radio.target
 - 名前: `.env` の `CHARACTER_NAME`
 - 性格・口調: リポジトリ直下に `persona.txt` を置くとシステムプロンプトを丸ごと差し替えられます (`{name}` がキャラ名に展開されます)
 
-### 2Dアバター
+### 2Dアバターと表情・感情
 
-既定では `avatar/index.html` 内のSVGキャラクター(口パク・まばたき・浮遊アニメ付き)が表示されます。
-自作の立ち絵を使う場合は、次の2枚のPNGを置くだけで自動で切り替わります:
+アバターは静止画ではなく、**連続値パラメータ**(口の開き・口角・目の開き・眉・頬・首の傾き・視線)を毎フレーム補間して動くリグです。コマ送りではなく滑らかに変化します。
 
-```
-avatar/avatar_closed.png   # 口を閉じた絵
-avatar/avatar_open.png     # 口を開けた絵
-```
+- **リップシンク**: VOICEVOXが生成したWAVからサーバ側で音量エンベロープ(50ms刻み)を抽出し、実際の音声に同期して口の開き具合が連続的に追従します
+- **感情表現**: LLMが返答の先頭に感情タグ(`[happy]` `[sad]` `[angry]` `[surprised]` `[shy]`)を付け、それに応じて表情プリセットへ滑らかに遷移します(タグは読み上げ・字幕から除去)。一定時間後にneutralへ自然に戻ります
 
-レイアウトや配色を変えたい場合は `avatar/index.html` を直接編集してください。
+描画は次の優先順で自動選択されます:
+
+1. **Live2D** — `avatar/live2d/` にCubismモデル一式を置き、`.env` で指定:
+   ```
+   LIVE2D_MODEL=live2d/hiyori/hiyori.model3.json
+   ```
+   pixi-live2d-display で描画し、`ParamMouthOpenY` `ParamEyeLOpen` `ParamAngleZ` などの標準パラメータを上記のリグで駆動します。モデルに表情(.exp3.json)が定義されていれば感情名(happy等)での切り替えも試みます。
+   ※ Cubism CoreはLive2D公式CDNから実行時にロードするため、OBSのブラウザソースがインターネットに出られる必要があります(ライセンス上リポジトリに同梱できないため)
+2. **PNG立ち絵** — `avatar/avatar_closed.png` / `avatar_open.png` の2枚を置くと使われます(素材の制約上、口パクのみ2値)
+3. **内蔵SVGキャラ** — 何も置かなくても動く既定モード。上記パラメータをすべてSVGの形状に反映(口のパスは開き+口角から毎フレーム再計算)
+
+レイアウトや配色は `avatar/index.html` を直接編集してください。
 確認はローカルで `http://127.0.0.1:8500/` を開くだけです(SSHポートフォワード可)。
 
 ### 音声

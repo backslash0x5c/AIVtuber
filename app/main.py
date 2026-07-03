@@ -12,7 +12,7 @@ import logging
 import signal
 import time
 
-from .audio import AudioMixer
+from .audio import ENVELOPE_FRAME_MS, AudioMixer, mouth_envelope
 from .chat_source import ChatMessage, ChatSource
 from .config import Config
 from .llm import OllamaClient
@@ -67,7 +67,7 @@ class RadioApp:
 
         # 音声経路の疎通確認を兼ねてオープニングを読み上げる
         if self.cfg.OPENING_MESSAGE:
-            await self._speak(self.cfg.OPENING_MESSAGE)
+            await self._speak(self.cfg.OPENING_MESSAGE, "happy")
 
         logger.info("初期化完了。コメント待機中...")
 
@@ -79,16 +79,23 @@ class RadioApp:
 
     # ---- 発話 ---------------------------------------------------------
 
-    async def _speak(self, text: str):
+    async def _speak(self, text: str, emotion: str = "neutral"):
         await self.overlay.broadcast({"type": "status", "state": "speaking"})
-        await self.overlay.broadcast({"type": "reply", "text": text})
+        await self.overlay.broadcast({"type": "reply", "text": text, "emotion": emotion})
         try:
             wav = await asyncio.to_thread(self.tts.synthesize, text)
         except Exception as e:
             logger.error("音声合成に失敗: %s", e)
             await self.overlay.broadcast({"type": "status", "state": "idle"})
             return
-        await self.overlay.broadcast({"type": "speech", "state": "start"})
+        envelope = mouth_envelope(wav)
+        await self.overlay.broadcast({
+            "type": "speech",
+            "state": "start",
+            "emotion": emotion,
+            "envelope": envelope,
+            "frame_ms": ENVELOPE_FRAME_MS,
+        })
         try:
             await self.mixer.play_wav(wav)
         finally:
@@ -120,19 +127,19 @@ class RadioApp:
         })
         await self.overlay.broadcast({"type": "status", "state": "thinking"})
 
-        response = await asyncio.to_thread(
+        response, emotion = await asyncio.to_thread(
             self.llm.reply, msg.author, msg.message, msg.is_superchat, msg.amount
         )
-        logger.info("返答: %s", response)
-        await self._speak(response)
+        logger.info("返答(%s): %s", emotion, response)
+        await self._speak(response, emotion)
         self.last_activity = time.time()
 
     async def _idle_chat(self):
         logger.info("コメントが無いため雑談します")
         await self.overlay.broadcast({"type": "status", "state": "thinking"})
-        text = await asyncio.to_thread(self.llm.idle_talk)
-        logger.info("雑談: %s", text)
-        await self._speak(text)
+        text, emotion = await asyncio.to_thread(self.llm.idle_talk)
+        logger.info("雑談(%s): %s", emotion, text)
+        await self._speak(text, emotion)
         self.last_activity = time.time()
 
     async def health_check(self):

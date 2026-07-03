@@ -70,6 +70,9 @@ class Config:
     # --- オーバーレイ(アバター)配信サーバ ---
     OVERLAY_HOST = _str("OVERLAY_HOST", "127.0.0.1")
     OVERLAY_PORT = _int("OVERLAY_PORT", 8500)
+    # avatar/ からの相対パスで .model3.json を指定するとLive2D描画になる
+    # 例: LIVE2D_MODEL=live2d/hiyori/hiyori.model3.json
+    LIVE2D_MODEL = _str("LIVE2D_MODEL")
 
     # --- 挙動 ---
     CHARACTER_NAME = _str("CHARACTER_NAME", "ゆめ")

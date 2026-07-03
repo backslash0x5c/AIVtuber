@@ -27,6 +27,7 @@ class OverlayServer:
     async def start(self):
         app = web.Application()
         app.router.add_get("/", self._index)
+        app.router.add_get("/config", self._config)
         app.router.add_get("/ws", self._ws_handler)
         app.router.add_static("/static", AVATAR_DIR)
         self._runner = web.AppRunner(app)
@@ -46,6 +47,17 @@ class OverlayServer:
 
     async def _index(self, _request: web.Request) -> web.Response:
         return web.FileResponse(AVATAR_DIR / "index.html")
+
+    async def _config(self, _request: web.Request) -> web.Response:
+        """オーバーレイページ向けの設定 (Live2Dモデルの有無など)"""
+        live2d_url = None
+        if self.cfg.LIVE2D_MODEL:
+            model_path = AVATAR_DIR / self.cfg.LIVE2D_MODEL
+            if model_path.is_file():
+                live2d_url = f"/static/{self.cfg.LIVE2D_MODEL}"
+            else:
+                logger.warning("LIVE2D_MODEL が見つかりません: %s", model_path)
+        return web.json_response({"live2d_model": live2d_url})
 
     async def _ws_handler(self, request: web.Request) -> web.WebSocketResponse:
         ws = web.WebSocketResponse(heartbeat=30)

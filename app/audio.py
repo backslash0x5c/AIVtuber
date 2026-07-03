@@ -9,16 +9,59 @@ BGMとの同時再生も不可能だった。新実装では:
 
 これによりエンコーダ(OBS)は一切再起動されず、配信は途切れない。
 """
+import array
 import asyncio
+import io
 import logging
 import re
 import subprocess
 import tempfile
+import wave
 from pathlib import Path
 
 from .config import Config
 
 logger = logging.getLogger(__name__)
+
+# リップシンク用エンベロープの1フレームあたりの長さ(ms)
+ENVELOPE_FRAME_MS = 50
+
+
+def mouth_envelope(wav_data: bytes, frame_ms: int = ENVELOPE_FRAME_MS) -> list[int]:
+    """WAVから口パク用の音量エンベロープ(0-100)を抽出する
+
+    フレームごとのRMSをピーク正規化した値。オーバーレイ側が再生開始時刻と
+    突き合わせて口の開き具合を連続的に補間する。
+    """
+    try:
+        with wave.open(io.BytesIO(wav_data)) as w:
+            n_channels = w.getnchannels()
+            sampwidth = w.getsampwidth()
+            raw = w.readframes(w.getnframes())
+            framerate = w.getframerate()
+    except (wave.Error, EOFError) as e:
+        logger.warning("エンベロープ抽出失敗(WAV解析): %s", e)
+        return []
+    if sampwidth != 2:  # VOICEVOXは16bit PCM
+        return []
+
+    samples = array.array("h")
+    samples.frombytes(raw[: len(raw) - len(raw) % 2])
+    if n_channels > 1:
+        samples = samples[::n_channels]
+
+    per_frame = max(1, int(framerate * frame_ms / 1000))
+    rms_values = []
+    for i in range(0, len(samples), per_frame):
+        chunk = samples[i : i + per_frame]
+        if not chunk:
+            break
+        rms_values.append((sum(s * s for s in chunk) / len(chunk)) ** 0.5)
+
+    peak = max(rms_values, default=0)
+    if peak <= 0:
+        return [0] * len(rms_values)
+    return [round(min(1.0, v / peak) * 100) for v in rms_values]
 
 
 class AudioMixer:

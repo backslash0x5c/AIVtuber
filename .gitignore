@@ -18,6 +18,9 @@ bgm/*
 avatar/avatar_open.png
 avatar/avatar_closed.png
 
+# Live2Dモデル (各自で配置する)
+avatar/live2d/
+
 # IDE / OS
 .vscode/
 .idea/

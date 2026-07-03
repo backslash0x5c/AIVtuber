@@ -40,25 +40,18 @@
     font-size: 3vh; font-weight: 700; font-variant-numeric: tabular-nums; opacity: .85;
   }
 
-  /* アバター */
+  /* アバター (SVG / PNG モード) */
   #avatar-wrap {
-    position: absolute; right: 6vw; bottom: 14vh; width: 34vh; height: 46vh; z-index: 2;
-    animation: bob 3.4s ease-in-out infinite;
-  }
-  @keyframes bob {
-    0%, 100% { transform: translateY(0); }
-    50%      { transform: translateY(-1.4vh); }
+    position: absolute; right: 6vw; bottom: 9vh; width: 38vh; height: 52vh; z-index: 2;
   }
   #avatar-wrap svg, #avatar-wrap img { width: 100%; height: 100%; }
   #avatar-img { display: none; object-fit: contain; }
 
-  /* 状態インジケータ */
-  #status {
-    position: absolute; right: 6vw; bottom: 9vh; width: 34vh; text-align: center;
-    color: #fff; font-size: 2vh; opacity: 0; transition: opacity .3s; z-index: 2;
-    text-shadow: 0 0 8px rgba(0,0,0,.5);
+  /* Live2D 用キャンバス */
+  #live2d-canvas {
+    position: absolute; right: 0; bottom: 0; width: 100vw; height: 100vh;
+    z-index: 2; display: none; pointer-events: none;
   }
-  #status.visible { opacity: .85; }
 
   /* コメント表示 */
   #comment-card {
@@ -100,47 +93,53 @@
   </div>
   <div class="clock" id="clock">--:--</div>
 
+  <canvas id="live2d-canvas"></canvas>
+
   <div id="avatar-wrap">
     <!-- 自作の立ち絵を使う場合: avatar/avatar_closed.png と avatar/avatar_open.png を置くと自動で切り替わる -->
     <img id="avatar-img" alt="avatar">
-    <svg id="avatar-svg" viewBox="0 0 400 540" xmlns="http://www.w3.org/2000/svg">
-      <!-- 後ろ髪 -->
-      <path d="M200 40 C 90 40 60 150 65 250 C 68 330 55 420 85 455 L 130 430 L 120 300 L 280 300 L 270 430 L 315 455 C 345 420 332 330 335 250 C 340 150 310 40 200 40 Z" fill="#7a5fc0"/>
-      <!-- 体 -->
-      <path d="M120 380 C 120 340 160 320 200 320 C 240 320 280 340 280 380 L 292 520 L 108 520 Z" fill="#5b48a8"/>
-      <path d="M160 330 L 200 380 L 240 330 C 225 322 212 320 200 320 C 188 320 175 322 160 330 Z" fill="#fff"/>
-      <circle cx="200" cy="368" r="7" fill="#ffd24d"/>
-      <!-- 首 -->
-      <rect x="188" y="290" width="24" height="40" rx="10" fill="#ffdfc9"/>
-      <!-- 顔 -->
-      <ellipse cx="200" cy="200" rx="105" ry="110" fill="#ffe6d3"/>
-      <!-- 前髪 -->
-      <path d="M200 60 C 110 60 90 140 95 185 C 120 175 135 130 145 120 C 150 140 165 150 200 150 C 235 150 250 140 255 120 C 265 130 280 175 305 185 C 310 140 290 60 200 60 Z" fill="#8a6fd0"/>
-      <!-- サイドの髪 -->
-      <path d="M95 180 C 82 220 84 268 96 300 C 108 280 112 230 112 200 Z" fill="#8a6fd0"/>
-      <path d="M305 180 C 318 220 316 268 304 300 C 292 280 288 230 288 200 Z" fill="#8a6fd0"/>
-      <!-- ヘッドホン -->
-      <path d="M85 175 C 85 90 315 90 315 175" fill="none" stroke="#332355" stroke-width="14" stroke-linecap="round"/>
-      <rect x="72" y="165" width="30" height="60" rx="14" fill="#332355"/>
-      <rect x="298" y="165" width="30" height="60" rx="14" fill="#332355"/>
-      <circle cx="87" cy="195" r="7" fill="var(--accent, #b48cf2)"/>
-      <circle cx="313" cy="195" r="7" fill="var(--accent, #b48cf2)"/>
-      <!-- 目 -->
-      <g id="eyes">
-        <ellipse class="eye" cx="160" cy="210" rx="13" ry="18" fill="#3a2a55"/>
-        <ellipse class="eye" cx="240" cy="210" rx="13" ry="18" fill="#3a2a55"/>
-        <circle cx="164" cy="203" r="4.5" fill="#fff"/>
-        <circle cx="244" cy="203" r="4.5" fill="#fff"/>
+    <svg id="avatar-svg" viewBox="0 0 400 560" xmlns="http://www.w3.org/2000/svg">
+      <!-- 体 (頭とは別に、呼吸で微妙に伸縮する) -->
+      <g id="body">
+        <path d="M120 400 C 120 360 160 340 200 340 C 240 340 280 360 280 400 L 292 540 L 108 540 Z" fill="#5b48a8"/>
+        <path d="M160 350 L 200 400 L 240 350 C 225 342 212 340 200 340 C 188 340 175 342 160 350 Z" fill="#fff"/>
+        <circle cx="200" cy="388" r="7" fill="#ffd24d"/>
+        <rect x="188" y="300" width="24" height="50" rx="10" fill="#ffdfc9"/>
       </g>
-      <!-- 頬 -->
-      <ellipse cx="138" cy="242" rx="14" ry="8" fill="#ffb9b0" opacity=".75"/>
-      <ellipse cx="262" cy="242" rx="14" ry="8" fill="#ffb9b0" opacity=".75"/>
-      <!-- 口 (閉/開をJSで切り替え) -->
-      <path id="mouth-closed" d="M185 262 Q 200 272 215 262" fill="none" stroke="#c96a5e" stroke-width="5" stroke-linecap="round"/>
-      <ellipse id="mouth-open" cx="200" cy="266" rx="15" ry="12" fill="#a3423a" style="display:none"/>
+
+      <!-- 頭全体 (傾き・上下は #head の transform をJSが毎フレーム更新) -->
+      <g id="head">
+        <!-- 後ろ髪 -->
+        <path d="M200 60 C 90 60 60 170 65 270 C 68 350 55 420 85 455 L 130 430 L 120 320 L 280 320 L 270 430 L 315 455 C 345 420 332 350 335 270 C 340 170 310 60 200 60 Z" fill="#7a5fc0"/>
+        <!-- 顔 -->
+        <ellipse cx="200" cy="220" rx="105" ry="110" fill="#ffe6d3"/>
+        <!-- 前髪 -->
+        <path d="M200 80 C 110 80 90 160 95 205 C 120 195 135 150 145 140 C 150 160 165 170 200 170 C 235 170 250 160 255 140 C 265 150 280 195 305 205 C 310 160 290 80 200 80 Z" fill="#8a6fd0"/>
+        <!-- サイドの髪 -->
+        <path d="M95 200 C 82 240 84 288 96 320 C 108 300 112 250 112 220 Z" fill="#8a6fd0"/>
+        <path d="M305 200 C 318 240 316 288 304 320 C 292 300 288 250 288 220 Z" fill="#8a6fd0"/>
+        <!-- ヘッドホン -->
+        <path d="M85 195 C 85 110 315 110 315 195" fill="none" stroke="#332355" stroke-width="14" stroke-linecap="round"/>
+        <rect x="72" y="185" width="30" height="60" rx="14" fill="#332355"/>
+        <rect x="298" y="185" width="30" height="60" rx="14" fill="#332355"/>
+        <circle cx="87" cy="215" r="7" fill="var(--accent, #b48cf2)"/>
+        <circle cx="313" cy="215" r="7" fill="var(--accent, #b48cf2)"/>
+        <!-- 眉 (角度・高さをJSが更新) -->
+        <path id="brow-l" d="M143 194 Q 160 187 177 194" fill="none" stroke="#6a4fb0" stroke-width="5" stroke-linecap="round"/>
+        <path id="brow-r" d="M223 194 Q 240 187 257 194" fill="none" stroke="#6a4fb0" stroke-width="5" stroke-linecap="round"/>
+        <!-- 目 (開き具合 = ry をJSが更新) -->
+        <ellipse id="eye-l" cx="160" cy="228" rx="13" ry="18" fill="#3a2a55"/>
+        <ellipse id="eye-r" cx="240" cy="228" rx="13" ry="18" fill="#3a2a55"/>
+        <circle id="hl-l" cx="164" cy="221" r="4.5" fill="#fff"/>
+        <circle id="hl-r" cx="244" cy="221" r="4.5" fill="#fff"/>
+        <!-- 頬 (感情で濃さが変わる) -->
+        <ellipse id="blush-l" cx="138" cy="260" rx="14" ry="8" fill="#ffb9b0" opacity=".4"/>
+        <ellipse id="blush-r" cx="262" cy="260" rx="14" ry="8" fill="#ffb9b0" opacity=".4"/>
+        <!-- 口 (開き・口角をJSがパスごと再計算) -->
+        <path id="mouth" d="" fill="#a3423a" stroke="#c96a5e" stroke-width="3" stroke-linejoin="round"/>
+      </g>
     </svg>
   </div>
-  <div id="status"></div>
 
   <div id="comment-card">
     <span id="comment-author"></span><span id="comment-amount"></span>
@@ -161,57 +160,235 @@
   };
   tick(); setInterval(tick, 5000);
 
-  // ---- カスタム立ち絵 (PNG) があればSVGの代わりに使う ----
-  let useImages = false;
-  const imgClosed = "/static/avatar_closed.png";
-  const imgOpen = "/static/avatar_open.png";
-  fetch(imgClosed, { method: "HEAD" }).then((r) => {
-    if (!r.ok) return;
-    fetch(imgOpen, { method: "HEAD" }).then((r2) => {
-      if (!r2.ok) return;
-      useImages = true;
-      $("avatar-svg").style.display = "none";
-      const img = $("avatar-img");
-      img.src = imgClosed;
-      img.style.display = "block";
-    });
-  }).catch(() => {});
+  // =====================================================================
+  //  表情パラメータリグ
+  //  すべて連続値。目標値(target)へ毎フレーム指数補間するため、
+  //  感情の切り替わりも口パクもコマ送りにならず滑らかに変化する。
+  // =====================================================================
+  const P = {  // 現在値
+    mouth: 0,      // 口の開き 0..1 (音声エンベロープ駆動)
+    smile: 0.3,    // 口角 -1(への字)..1(にっこり)
+    eyeOpen: 1,    // 目の開き 0..1.3 (1超=見開き)
+    browY: 0,      // 眉の高さ -8(上げ)..6(下げ) px
+    browAngle: 0,  // 眉の角度 -1(困り)..1(怒り)
+    blush: 0.35,   // 頬の赤み 0..1
+    tilt: 0,       // 首の傾き deg
+    lookX: 0,      // 視線 -1..1
+  };
+  const T = { ...P };  // 目標値
 
-  // ---- 口パク ----
-  let speaking = false;
-  let mouthTimer = null;
-  const setMouth = (open) => {
-    if (useImages) {
-      $("avatar-img").src = open ? imgOpen : imgClosed;
-    } else {
-      $("mouth-open").style.display = open ? "" : "none";
-      $("mouth-closed").style.display = open ? "none" : "";
+  const EMOTIONS = {
+    neutral:   { smile: 0.3,  eyeOpen: 1.0,  browY: 0,  browAngle: 0,    blush: 0.35, tilt: 0,  lookX: 0 },
+    happy:     { smile: 1.0,  eyeOpen: 0.82, browY: -2, browAngle: 0,    blush: 0.7,  tilt: 3,  lookX: 0 },
+    sad:       { smile: -0.6, eyeOpen: 0.6,  browY: 2,  browAngle: -1,   blush: 0.25, tilt: -3, lookX: -0.3 },
+    angry:     { smile: -0.4, eyeOpen: 0.85, browY: 3,  browAngle: 1,    blush: 0.3,  tilt: 0,  lookX: 0 },
+    surprised: { smile: 0.1,  eyeOpen: 1.3,  browY: -7, browAngle: 0,    blush: 0.45, tilt: 0,  lookX: 0 },
+    shy:       { smile: 0.5,  eyeOpen: 0.7,  browY: 1,  browAngle: -0.5, blush: 1.0,  tilt: 4,  lookX: 0.6 },
+  };
+
+  let emotion = "neutral";
+  let emotionTimer = null;
+  const setEmotion = (name, holdMs = 8000) => {
+    if (!EMOTIONS[name]) name = "neutral";
+    emotion = name;
+    Object.assign(T, EMOTIONS[name]);
+    clearTimeout(emotionTimer);
+    if (name !== "neutral") {
+      emotionTimer = setTimeout(() => setEmotion("neutral"), holdMs);
     }
   };
-  const startMouth = () => {
-    if (mouthTimer) return;
-    let open = false;
-    mouthTimer = setInterval(() => {
-      open = !open || Math.random() < 0.25;
-      setMouth(open);
-    }, 130);
-  };
-  const stopMouth = () => {
-    clearInterval(mouthTimer); mouthTimer = null; setMouth(false);
+
+  // ---- リップシンク (音量エンベロープ) ----
+  let envelope = null, envFrameMs = 50, envStart = 0, speaking = false;
+  const mouthTarget = (now) => {
+    if (!speaking || !envelope || envelope.length === 0) return 0;
+    const pos = (now - envStart) / envFrameMs;
+    const i = Math.floor(pos);
+    if (i < 0) return 0;
+    if (i >= envelope.length) return 0;
+    const a = envelope[i] / 100;
+    const b = (envelope[i + 1] ?? 0) / 100;
+    return a + (b - a) * (pos - i);
   };
 
-  // ---- まばたき ----
-  const blink = () => {
-    document.querySelectorAll(".eye").forEach((e) => {
-      e.style.transformOrigin = "center 210px";
-      e.style.transform = "scaleY(0.12)";
-      setTimeout(() => { e.style.transform = ""; }, 140);
+  // ---- まばたき (連続値: blink 0..1 を高速補間) ----
+  let blink = 0, blinkTarget = 0;
+  const scheduleBlink = () => {
+    blinkTarget = 1;
+    setTimeout(() => { blinkTarget = 0; }, 90);
+    setTimeout(scheduleBlink, 2500 + Math.random() * 3500);
+  };
+  setTimeout(scheduleBlink, 2000);
+
+  // =====================================================================
+  //  レンダラ: Live2D > PNG立ち絵 > 内蔵SVG の優先順で自動選択
+  // =====================================================================
+
+  // ---- SVGレンダラ ----
+  const svgRenderer = (() => {
+    const el = {
+      head: $("head"),
+      body: $("body"),
+      eyeL: $("eye-l"), eyeR: $("eye-r"),
+      hlL: $("hl-l"), hlR: $("hl-r"),
+      browL: $("brow-l"), browR: $("brow-r"),
+      blushL: $("blush-l"), blushR: $("blush-r"),
+      mouth: $("mouth"),
+    };
+    const mouthPath = (open, smile) => {
+      const cx = 200, cy = 282, w = 17;
+      const lift = smile * 8;                 // 口角の上がり(下がり)
+      const gap = 1.5 + open * 26;            // 開き具合
+      const top = cy - gap * 0.3;
+      const bottom = cy + gap * 0.7;
+      return `M ${cx - w} ${cy - lift} Q ${cx} ${top} ${cx + w} ${cy - lift} ` +
+             `Q ${cx} ${bottom + lift * 0.5} ${cx - w} ${cy - lift} Z`;
+    };
+    return (p, t) => {
+      // 呼吸 + 首の傾き
+      const breath = Math.sin(t / 1700) * 4;
+      el.head.setAttribute("transform",
+        `translate(0 ${breath}) rotate(${p.tilt} 200 260)`);
+      el.body.setAttribute("transform", `translate(0 ${breath * 0.35})`);
+      // 目
+      const openNow = Math.max(0.05, p.eyeOpen * (1 - blink));
+      el.eyeL.setAttribute("ry", 18 * openNow);
+      el.eyeR.setAttribute("ry", 18 * openNow);
+      el.hlL.style.opacity = el.hlR.style.opacity = openNow > 0.4 ? 1 : 0;
+      el.hlL.setAttribute("cx", 164 + p.lookX * 5);
+      el.hlR.setAttribute("cx", 244 + p.lookX * 5);
+      // 眉
+      el.browL.setAttribute("transform",
+        `translate(0 ${p.browY}) rotate(${ p.browAngle * 12} 160 194)`);
+      el.browR.setAttribute("transform",
+        `translate(0 ${p.browY}) rotate(${-p.browAngle * 12} 240 194)`);
+      // 頬
+      el.blushL.setAttribute("opacity", 0.15 + p.blush * 0.65);
+      el.blushR.setAttribute("opacity", 0.15 + p.blush * 0.65);
+      // 口
+      el.mouth.setAttribute("d", mouthPath(p.mouth, p.smile));
+    };
+  })();
+
+  // ---- PNG立ち絵レンダラ (2枚切り替え: 素材の制約上ここだけ2値) ----
+  let pngMode = false;
+  const imgClosed = "/static/avatar_closed.png";
+  const imgOpen = "/static/avatar_open.png";
+  const pngRenderer = (p) => {
+    const img = $("avatar-img");
+    const want = p.mouth > 0.3 ? imgOpen : imgClosed;
+    if (!img.src.endsWith(want)) img.src = want;
+    img.style.transform = `rotate(${p.tilt * 0.6}deg)`;
+  };
+
+  // ---- Live2D レンダラ ----
+  let live2dModel = null;
+  const loadScript = (src) => new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = src; s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+  const setupLive2D = async (modelUrl) => {
+    await loadScript("https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js");
+    await loadScript("https://cdn.jsdelivr.net/npm/pixi.js@6.5.10/dist/browser/pixi.min.js");
+    await loadScript("https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js");
+
+    const canvas = $("live2d-canvas");
+    canvas.style.display = "block";
+    $("avatar-wrap").style.display = "none";
+
+    const app = new PIXI.Application({
+      view: canvas, backgroundAlpha: 0, autoStart: true,
+      width: window.innerWidth, height: window.innerHeight,
     });
-    setTimeout(blink, 2500 + Math.random() * 3500);
-  };
-  setTimeout(blink, 2000);
+    const model = await PIXI.live2d.Live2DModel.from(modelUrl, { autoInteract: false });
+    // 画面右側・下寄せに配置
+    const scale = (window.innerHeight * 0.85) / model.height;
+    model.scale.set(scale);
+    model.anchor.set(0.5, 1);
+    model.position.set(window.innerWidth * 0.75, window.innerHeight * 1.02);
+    app.stage.addChild(model);
+    live2dModel = model;
 
-  // ---- 字幕 ----
+    // モデル更新の後に毎フレームパラメータを上書きする
+    const set = (id, v) => {
+      try { model.internalModel.coreModel.setParameterValueById(id, v); } catch (e) {}
+    };
+    app.ticker.add(() => {
+      const openNow = Math.max(0, P.eyeOpen * (1 - blink));
+      set("ParamMouthOpenY", P.mouth);
+      set("ParamMouthForm", P.smile);
+      set("ParamEyeLOpen", openNow);
+      set("ParamEyeROpen", openNow);
+      set("ParamEyeBallX", P.lookX);
+      set("ParamAngleZ", P.tilt * 2.5);
+      set("ParamBodyAngleZ", P.tilt);
+      set("ParamBrowLY", -P.browY / 10);
+      set("ParamBrowRY", -P.browY / 10);
+      set("ParamBrowLAngle", -P.browAngle * 0.8);
+      set("ParamBrowRAngle", -P.browAngle * 0.8);
+      set("ParamCheek", P.blush);
+    });
+    // モデルが表情定義を持っていれば感情名で切り替えも試みる
+    window.__applyExpression = (name) => {
+      try { model.expression(name); } catch (e) {}
+    };
+  };
+
+  // レンダラ選択
+  fetch("/config").then((r) => r.json()).then((cfg) => {
+    if (cfg.live2d_model) {
+      setupLive2D(cfg.live2d_model).catch((e) => {
+        console.error("Live2D初期化失敗。SVGにフォールバックします:", e);
+        $("live2d-canvas").style.display = "none";
+        $("avatar-wrap").style.display = "";
+      });
+    } else {
+      fetch(imgClosed, { method: "HEAD" }).then((r) => {
+        if (!r.ok) return;
+        return fetch(imgOpen, { method: "HEAD" }).then((r2) => {
+          if (!r2.ok) return;
+          pngMode = true;
+          $("avatar-svg").style.display = "none";
+          const img = $("avatar-img");
+          img.src = imgClosed;
+          img.style.display = "block";
+        });
+      }).catch(() => {});
+    }
+  }).catch(() => {});
+
+  // =====================================================================
+  //  メインループ: 目標値への指数補間 (口は速く、表情はゆっくり)
+  // =====================================================================
+  let lastT = performance.now();
+  const loop = (now) => {
+    const dt = Math.min(0.1, (now - lastT) / 1000);
+    lastT = now;
+    const fast = 1 - Math.exp(-dt * 22);   // 口・まばたき用
+    const slow = 1 - Math.exp(-dt * 7);    // 表情用
+
+    T.mouth = mouthTarget(now);
+    P.mouth += (T.mouth - P.mouth) * fast;
+    blink += (blinkTarget - blink) * fast;
+    for (const k of ["smile", "eyeOpen", "browY", "browAngle", "blush", "tilt", "lookX"]) {
+      P[k] += (T[k] - P[k]) * slow;
+    }
+
+    if (live2dModel) {
+      // Live2Dはticker側で反映済み
+    } else if (pngMode) {
+      pngRenderer(P);
+    } else {
+      svgRenderer(P, now);
+    }
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+
+  // =====================================================================
+  //  字幕・コメント・WebSocket
+  // =====================================================================
   let subtitleHideTimer = null;
   const showSubtitle = (text) => {
     const el = $("subtitle");
@@ -224,16 +401,6 @@
     subtitleHideTimer = setTimeout(() => $("subtitle").classList.remove("visible"), 4000);
   };
 
-  // ---- 状態表示 ----
-  const STATUS_TEXT = { thinking: "かんがえちゅう…", speaking: "" , idle: "" };
-  const showStatus = (state) => {
-    const el = $("status");
-    const text = STATUS_TEXT[state] ?? "";
-    el.textContent = text;
-    el.classList.toggle("visible", !!text);
-  };
-
-  // ---- コメントカード ----
   const showComment = (ev) => {
     const card = $("comment-card");
     $("comment-author").textContent = ev.author;
@@ -243,23 +410,38 @@
     card.classList.add("visible");
   };
 
-  // ---- WebSocket ----
   const connect = () => {
     const ws = new WebSocket(`ws://${location.host}/ws`);
     ws.onmessage = (msg) => {
       let ev;
       try { ev = JSON.parse(msg.data); } catch { return; }
       switch (ev.type) {
-        case "comment": showComment(ev); break;
-        case "reply": showSubtitle(ev.text); break;
-        case "speech":
-          if (ev.state === "start") { speaking = true; startMouth(); }
-          else { speaking = false; stopMouth(); scheduleHideSubtitle(); }
+        case "comment":
+          showComment(ev);
           break;
-        case "status": showStatus(ev.state); break;
+        case "reply":
+          showSubtitle(ev.text);
+          if (ev.emotion) {
+            setEmotion(ev.emotion);
+            if (window.__applyExpression) window.__applyExpression(ev.emotion);
+          }
+          break;
+        case "speech":
+          if (ev.state === "start") {
+            speaking = true;
+            envelope = ev.envelope || null;
+            envFrameMs = ev.frame_ms || 50;
+            envStart = performance.now();
+            if (ev.emotion) setEmotion(ev.emotion);
+          } else {
+            speaking = false;
+            envelope = null;
+            scheduleHideSubtitle();
+          }
+          break;
       }
     };
-    ws.onclose = () => { stopMouth(); setTimeout(connect, 2000); };
+    ws.onclose = () => { speaking = false; envelope = null; setTimeout(connect, 2000); };
     ws.onerror = () => ws.close();
   };
   connect();
