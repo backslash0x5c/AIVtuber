@@ -85,13 +85,14 @@ def main() -> int:
         detail = " / ".join(f"{w}x{h}: {', '.join(names)}" for (w, h), names in sizes.items())
         errors.append(f"レイヤーのキャンバスサイズが揃っていません ({detail})")
 
-    for a, b in (("mouth_open", "mouth_closed"), ("eyes_open", "eyes_closed")):
-        if (a in roles_seen) != (b in roles_seen):
-            warnings.append(f"{a} と {b} は片方だけだとクロスフェードできません")
+    # 口パクには mouth_open が必須。まばたきには eyes_closed が必須
+    # (ベース絵に開き目を残して eyes_closed を被せる方式では eyes_open は不要)
     if "mouth_open" not in roles_seen:
         warnings.append("mouth_open レイヤーが無いため口パクしません")
-    if "eyes_open" not in roles_seen:
-        warnings.append("eyes_open レイヤーが無いためまばたきしません")
+    if "eyes_closed" not in roles_seen:
+        warnings.append("eyes_closed レイヤーが無いためまばたきしません")
+    if "eyes_open" in roles_seen and "eyes_closed" not in roles_seen:
+        warnings.append("eyes_open だけでは目を閉じられません (eyes_closed が必要)")
 
     for e in errors:
         print(f"エラー: {e}")
