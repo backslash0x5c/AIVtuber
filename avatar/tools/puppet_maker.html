@@ -215,10 +215,12 @@
   };
 
   // 楕円の外周リングから色をサンプリング (中央値: 線画をまたいでも壊れにくい)
-  const sampleRingMedian = (data, r) => {
+  // lowerOnly: 楕円の下半分だけから採る (目の上はまつ毛・髪なので、閉じ目の肌色は頬側から採る)
+  const sampleRingMedian = (data, r, lowerOnly = false) => {
     const rs = [], gs = [], bs = [];
     for (let i = 0; i < 96; i++) {
       const a = (i / 96) * Math.PI * 2;
+      if (lowerOnly && Math.sin(a) < 0.2) continue;
       const x = Math.round(r.cx + Math.cos(a) * r.rx * 1.25);
       const y = Math.round(r.cy + Math.sin(a) * r.ry * 1.25);
       if (x < 0 || y < 0 || x >= W || y >= H) continue;
@@ -247,8 +249,8 @@
   };
 
   // 楕円領域を周囲の色で塗り潰す(簡易インペイント)。フチはぼかして馴染ませる
-  const fillRegion = (ctx, data, r, scale = 1.15) => {
-    const [cr, cg, cb] = sampleRingMedian(data, r);
+  const fillRegion = (ctx, data, r, scale = 1.15, lowerOnly = false) => {
+    const [cr, cg, cb] = sampleRingMedian(data, r, lowerOnly);
     const g = ctx.createRadialGradient(r.cx, r.cy, 0, r.cx, r.cy, 1);
     ctx.save();
     ctx.translate(r.cx, r.cy);
@@ -290,7 +292,7 @@
 
   // 閉じ目: 肌で塗った上に下向きのまつ毛アーチを描く
   const drawClosedEye = (ctx, data, r) => {
-    fillRegion(ctx, data, r);
+    fillRegion(ctx, data, r, 1.15, true);
     const [lr, lg, lb] = sampleDarkest(data, r);
     ctx.save();
     ctx.strokeStyle = `rgb(${lr},${lg},${lb})`;
