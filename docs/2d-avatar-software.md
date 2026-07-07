@@ -13,6 +13,10 @@
 | nizima LIVE | Live2D公式配信アプリ | Win/Mac/iOS | 収益化配信は有料プラン | 月550円(年商1000万未満) | 不可(Linux非対応) |
 | E-mote / えもふり | プロプロライエタリ(ADV/ゲーム向け) | Editor: Win | 個人・同人のみ無償商用可 | 個人無料 / 法人30万円/年 | 弱い(配信向けランタイムなし) |
 | Spine | ゲーム向け2Dスケルタル | Win/Linux/Mac | 可(Editorライセンス必須) | Essential/Professional買切り<br>年商$500k超はEnterprise | 可能だがVTuber向きでない |
+| OPTPiX SpriteStudio | ゲーム向けアニメ制作 | Win/Mac | 可(Starterは無償) | Starter無料(年商5000万未満)<br>Business/Professional有償 | ゲーム向け・顔連動なし |
+| DragonBones | OSSスケルタルアニメ | Win/Mac/Linux(要ビルド) | 制限なし(MIT) | 無料 | 開発ほぼ停滞・顔連動なし |
+| AnimeEffects | OSSメッシュ変形アニメ | Win/**Linux**/Mac | 可(GPLv3) | 無料 | 動画書き出し用・配信非対応 |
+| Moho (旧Anime Studio) | プロプライエタリ・映像制作 | Win/Mac | 可(買切り) | Debut $59.99 / Pro $399.99 | 映像制作用・リアルタイム非対応 |
 
 ## 各論
 
@@ -76,6 +80,76 @@
   Enterpriseライセンス必須。ランタイムは公式多数(Webあり)だがEditorライセンス保持が
   利用条件。表情モーフィングよりボーンアニメ向きで、VTuber配信用途のエコシステムはない。
 
+## 追加調査: OPTPiX / DragonBones / AnimeEffects / Moho
+
+この4つは共通して「**あらかじめ作ったアニメーションを再生する/動画に書き出す**」
+ためのツールであり、**カメラや外部入力にリアルタイム連動する『アバター』の枠組みを
+持たない**。本システムは「LLMの発話に合わせて口パク・感情表現をリアルタイム駆動する」
+用途なので、そのままでは噛み合わない。それぞれの位置づけは以下。
+
+### OPTPiX SpriteStudio (ウェブテクノロジ)
+
+- 日本製のゲーム向け2Dアニメ制作ツール。ボーン/メッシュ変形に対応。
+- **Starterライセンスは無償**(前年度売上5000万円未満の個人・法人)、Academicも無償。
+  年商1000万円超はBusiness/Professionalの有償ライセンスが必要(ロイヤリティは無し)。
+  ※「無償=売上5000万未満」「有償が必要=売上1000万超」の二つの閾値が案内されており、
+  最新の正確な区分は公式購入ページで要確認。
+- ゲーム組み込み用ランタイム(Unity/Cocos等)はあるが、**顔トラッキング/リアルタイム
+  アバター駆動の仕組みは無い**。本システムには不向き。
+
+### DragonBones (Egret Technology)
+
+- MITライセンスの**無料**オープンソース・スケルタルアニメツール。商用制限なし。
+- ただし開発が長く停滞気味(Egret社のメンテナンスが実質止まっている)で、
+  近年のOSやツールチェーンでの動作情報が少ない。
+- スプライトのボーンアニメが主目的で、**表情モーフィングやリアルタイム顔連動は非対応**。
+  ゲーム内キャラのアニメ再生向き。本システムには不向き。
+
+### AnimeEffects
+
+- GPLv3の**無料**オープンソース。ポリゴンメッシュ変形ベースの2Dキーフレームアニメツール。
+  **Linux対応**。1枚絵を変形させて動かす発想はLive2Dに近い。
+- ただし成果物は**動画/連番画像の書き出し**が前提で、リアルタイムに外部から
+  パラメータを与えて動かすランタイムやアバター機能は無い。
+- 「決まった動きのループ動画」を素材として作るには使えるが、
+  LLM発話への口パク同期のような動的用途には使えない。本システムには不向き。
+
+### Moho (旧 Anime Studio, Lost Marble)
+
+- ベクター/ボーンベースの本格2Dアニメ制作ソフト。買切り(Debut $59.99 / Pro $399.99)。
+  商用利用可。プロのアニメ・MV制作で実績。
+- こちらも**映像作品の制作ツール**であり、リアルタイムのアバター配信機能は持たない。
+  スマートボーン等でキャラを動かした動画は作れるが、外部入力連動はできない。
+  本システムには不向き。
+
+**まとめ**: 4つとも「作り込んだアニメを再生・書き出す」制作ツールで、AITuberに必要な
+「外部信号でリアルタイムに表情を動かすアバターランタイム」を欠く。この用途で現実的なのは
+やはり **Live2D(アバター系ランタイムを持つ)** か **Inochi2D系(VTuber特化のOSS)** の2択。
+
+## Live2D Cubism と nizima LIVE の違い
+
+どちらもLive2D社の製品だが、**役割がまったく別**。混同しやすいので整理する。
+
+| | Live2D Cubism | nizima LIVE |
+|---|---|---|
+| 役割 | モデルを**作る**(制作) + **動かす技術基盤**(SDK) | 完成モデルを**カメラで動かす配信アプリ** |
+| 具体的に何をする | イラストをパーツ分割し、メッシュ変形・パラメータ・物理演算を設定して`.model3.json`一式を書き出す | `.model3.json`を読み込み、Webカメラ/iPhoneで顔を捉えてリアルタイムに動かす |
+| 制作機能 | あり(これが本体) | **なし**(自分でモデルは作れない) |
+| トラッキング配信機能 | なし(SDKを自分で組み込む必要) | あり(GUIで完結、OBSへ出力) |
+| 対応OS | Editor: Win/Mac | Win/Mac/iOS |
+| 料金 | Editor FREE/PRO(PRO 月1,309円〜) | 配信アプリ(年商1000万未満 月550円〜) |
+| 立ち位置 | VTube Studio等**全ての土台**となる制作ツール | VTube Studioの**Live2D公式版**にあたる配信ツール |
+
+- **関係のたとえ**: Cubism = 「キャラを設計・造形する工房」、nizima LIVE = 「完成した
+  キャラに中の人の動きを憑依させて画面に映す舞台装置」。
+  Cubismで作った(または買った)モデルを、nizima LIVE(またはVTube Studio)で動かす、という流れ。
+- **本システムとの関係**: nizima LIVE も VTube Studio も**Linux非対応**なので、
+  ヘッドレスVPSでは使えない。本システムは nizima LIVE に相当する「モデルを動かす」役割を
+  **Webランタイム(pixi-live2d-display)として自前で実装済み**であり、外部トラッキングの
+  代わりにLLMの発話・感情でパラメータを駆動している。
+  つまり必要なのは **Cubism(または購入モデル)で作った`.model3.json`だけ**で、
+  nizima LIVE は不要。
+
 ## 推奨
 
 1. **Live2D (実装済みのWebランタイム)** — モデルを購入/依頼/自作して `LIVE2D_MODEL` に
@@ -98,3 +172,8 @@
 - nizima LIVE 料金: https://nizimalive.com/pricing/
 - E-mote: https://emote.mtwo.co.jp/support/faq/ , https://emote.mtwo.co.jp/products/
 - Spine: https://esotericsoftware.com/spine-purchase , https://en.esotericsoftware.com/spine-editor-license
+- OPTPiX SpriteStudio: https://www.webtech.co.jp/spritestudio/purchase.html , https://www.webtech.co.jp/spritestudio/starter.html
+- DragonBones: https://dragonbones.github.io/ , https://github.com/DragonBones/DragonBonesAS/wiki/License
+- AnimeEffects: https://animeeffectsdevs.github.io/ , https://github.com/AnimeEffectsDevs/AnimeEffects
+- Moho: https://moho.lostmarble.com/pages/buy , https://www.lostmarble.com/moho/manual/license.html
+- nizima LIVE 料金/比較: https://nizimalive.com/pricing/
