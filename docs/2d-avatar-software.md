@@ -52,6 +52,44 @@
   口パク/まばたき/首の傾きをVMCで送る実装を足せば連動できる(中程度の工数)。
   Webブラウザ内ランタイム(WASM)は実験段階のため、ブラウザソース方式はまだ非推奨。
 
+### 「CLIで設定して用意したイラストを動かせるか」への回答
+
+結論: **"完全にCLIだけ" では無理。ただし工程を分ければ実用的には可能。**
+作業は明確に2フェーズに分かれ、片方はGUI必須・片方はヘッドレス自動化可能。
+
+**フェーズA: リギング(イラスト → 動くパペット化)= GUI必須・CLI不可**
+
+- イラストをそのまま渡しても動かない。パーツ分割・メッシュ・変形デフォーマ・
+  パラメータ・物理演算を設定して nijilive パペット(`.inp`/`.inx`)に変換する必要がある。
+- この設定は **nijigenerate(GUIエディタ)で手作業**。CLIでリグを組む機能は無い。
+- 現実的には**手元のデスクトップPC(Win/Mac/Linux)でリギングし、出来た
+  モデルファイルだけをVPSへ転送**する。ここはコマンドラインでは代替できない。
+
+**フェーズB: VPS上での再生・駆動 = ヘッドレスで自動化可能**
+
+- リギング済みモデルがあれば、VPS側の動作は**物理ディスプレイなしで回せる**:
+  1. `Xvfb :99` で仮想ディスプレイを用意
+  2. `nijiexpose`(GUIアプリだが仮想ディスプレイ上で起動)にモデルを読ませる
+  3. 本アプリから **VMC(OSC/UDP)で口パク・まばたき・首の傾きを送信**して駆動
+     (Inochi2Dには vmc-d というVMC実装があり、VTube Studio/VMC入力に対応)
+  4. OBSの**ウィンドウキャプチャ**で nijiexpose の描画を取り込む
+- 起動はCLI・駆動はプロトコル送信なので、初期設定さえ済めば**スクリプト化・
+  常駐化できる**(systemd化も可)。ただし nijiexpose 初回のモデル読み込みや
+  VMCポート設定はGUI操作が要る場合があり、設定ファイル/自動化の作り込みが必要。
+
+**リスクと注意点**
+
+- nijiexpose はネイティブ **OpenGL** 描画。GPU無しVPSの**ソフトウェアOpenGL
+  (Mesa llvmpipe)で起動するかは要実測**。動かない場合はGPU付きVPSが必要になる。
+  (現行のLive2D方式は WebGL をヘッドレスChromiumで描画でき、ここは検証済み。
+  この一点で現状はLive2Dの方が確実)
+- したがって Inochi2D 系でいく場合の現実的な最小構成は
+  **「デスクトップでリギング → モデルをVPSへ → Xvfb+nijiexpose を VMC で駆動 →
+  OBSウィンドウキャプチャ」**。完全CLI化ではなく "GUIリギングは別マシン、
+  VPS側はヘッドレス自動化" というハイブリッドになる。
+- 本アプリ側の追加実装: 既存の口パク/感情パラメータを **VMC(OSC)パケットに変換して
+  UDP送信するモジュール**。Live2D用の駆動値をそのまま流用できるので工数は中程度。
+
 ### Inochi2D系 vs Live2D: 動作スペック・メモリの比較
 
 前提として、両者は**描画方式が同じ系統**(1枚のイラストをパーツ分割し、メッシュを
@@ -207,6 +245,8 @@ GPUで変形してリアルタイム描画)なので、同程度のモデルで�
 - Inochi2D getting-started(RAM推奨/OpenGL要件): https://docs.inochi2d.com/en/latest/creator/getting-started.html
 - Inochi2D SDK(OpenGL 4.2/SPIR-V要件): https://github.com/Inochi2D/inochi2d
 - Inochi2D 0.9 Web(WASM/WebGL/WebGPU)計画・hiatus: https://inochi2d.com/
+- VMC(OSC)入力・vmc-d実装: https://github.com/Inochi2D/vmc-d , https://protocol.vmc.info/english.html
+- nijiexpose(トラッキング配信): https://github.com/nijigenerate/nijiexpose
 - VTube Studio: https://store.steampowered.com/app/1325860/VTube_Studio/
 - nizima LIVE 料金: https://nizimalive.com/pricing/
 - E-mote: https://emote.mtwo.co.jp/support/faq/ , https://emote.mtwo.co.jp/products/
