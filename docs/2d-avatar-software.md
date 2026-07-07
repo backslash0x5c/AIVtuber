@@ -40,9 +40,10 @@
 
 ### Inochi2D系: nijigenerate / nijiexpose / nijilive (OSS本命)
 
-- Inochi2Dから2024年頃フォークされた **nijigenerate**(エディタ) / **nijiexpose**(配信用) /
-  **nijilive**(ランタイムライブラリ) が現在活発に開発されている。旧Inochi Creator/Session
-  も入手可能。
+- 本家 **Inochi2D** は資金面の事情で開発が事実上の休止(indefinite hiatus)に入っており、
+  現在活発なのは2024年頃フォークされた **nijigenerate**(エディタ) / **nijiexpose**(配信用) /
+  **nijilive**(ランタイムライブラリ)。旧Inochi Creator/Session も入手可能。
+  ※「Inochi2Dを使う」= 実質このnijigenerate系フォークを使うことになる。
 - ライセンスは BSD 2-clause。**無料・商用利用の制限なし・売上規模の条件なし**。
 - **Linuxネイティブ対応**が最大の強み(VTube Studioとの決定的な違い)。
 - PSDからのインポートでメッシュ変形ベースのリグを組む(Live2D Editorに近いワークフロー)。
@@ -50,6 +51,41 @@
   取り込む。トラッキング入力はVMCプロトコル(OSC)を受けられるため、本アプリから
   口パク/まばたき/首の傾きをVMCで送る実装を足せば連動できる(中程度の工数)。
   Webブラウザ内ランタイム(WASM)は実験段階のため、ブラウザソース方式はまだ非推奨。
+
+### Inochi2D系 vs Live2D: 動作スペック・メモリの比較
+
+前提として、両者は**描画方式が同じ系統**(1枚のイラストをパーツ分割し、メッシュを
+GPUで変形してリアルタイム描画)なので、同程度のモデルであれば負荷は基本的に近い。
+「3Dより軽い」というのは両者に共通して当てはまり、Inochi2Dだけが特別軽いわけではない。
+公式に確定したベンチマーク値は乏しいため、以下は公開情報と構造からの評価。
+
+| 項目 | Live2D (本システムのWebランタイム) | Inochi2D系 (nijilive/nijiexpose) |
+|---|---|---|
+| 描画API要件 | WebGL 1/2 (ブラウザ内) | ネイティブ OpenGL 3.1(nijilive)<br>※Inochi2D参照実装は 4.2+ とSPIR-V要求 |
+| 実行形態 | OBSブラウザソース内(GPU無しVPSでもソフトウェアGLで可) | ネイティブGUIアプリ(Xvfb+ウィンドウキャプチャ) |
+| メモリ目安 | テクスチャ依存。中規模モデルで概ね数十〜200MB程度<br>(=モデルのPNG解像度×枚数が支配的) | エディタ(nijigenerate)は大きめモデルで**1GB程度のRAM推奨**<br>ランタイムのみなら更に小さい |
+| CPU/GPU負荷 | 変形はGPU。60fpsで1コアの一部+GPU軽度 | 同様(GPUメッシュ変形)。ネイティブぶんオーバーヘッドは小さい傾向 |
+| メモリを決める主因 | **モデルのテクスチャ総容量**(2048²×複数枚なら増える) | 同左。エンジン差より**素材の作り**が支配的 |
+
+要点:
+
+- **メモリ・CPUの差は「エンジンの違い」より「モデルの作り(テクスチャ解像度と枚数、
+  メッシュ頂点数、物理演算の量)」でほぼ決まる**。同じ絵から同程度に組めば、
+  Live2DとInochi2Dで実消費に大差は出ない。
+- Inochi2Dランタイム(nijilive)の要求は **OpenGL 3.1** と軽め。ただし本家Inochi2Dの
+  参照ライブラリは **OpenGL 4.2 + SPIR-V** を要求し、これは**GPUの無いVPSの
+  ソフトウェアOpenGL(Mesa llvmpipe)では満たせない可能性が高い**。この点は要検証。
+- 本システムのLive2Dは**WebGLでブラウザ内描画**するため、GPU非搭載VPSでも
+  ソフトウェアレンダリングで動く(実際にヘッドレスChromiumで動作確認済み)。
+  Inochi2Dをブラウザソース方式で同様に動かす公式Web(WASM)ランタイムはまだ実験段階。
+- したがって**メモリ/スペック面ではLive2Dが不利ということはなく、むしろ現状の
+  ヘッドレスVPS + ブラウザソース構成との相性はLive2Dが上**。Inochi2Dの利点は
+  「完全無料・商用制限なし・エディタがLinuxで動く」という**ライセンスと制作環境**の側にある。
+
+数値の正確性について: 上記メモリ値は公開ドキュメントの推奨値と一般的なWebGL/Live2D
+アプリの実測レンジからの概算で、機種・モデルにより大きく変動する。厳密な比較が必要なら、
+実際に使うモデルを両ランタイムに読み込んで `nvidia-smi` / `top` / ブラウザのタスク
+マネージャで実測することを推奨する。
 
 ### VTube Studio (参考: VPSでは使えない)
 
@@ -168,6 +204,9 @@
 - 拡張性アプリケーション申請: https://www.live2d.jp/application-publication-license/
 - Inochi2D: https://inochi2d.com/ , https://docs.inochi2d.com/en/latest/inochi2d/faq.html
 - nijigenerate/nijiexpose: https://github.com/nijigenerate/nijigenerate , https://github.com/nijigenerate/nijilive
+- Inochi2D getting-started(RAM推奨/OpenGL要件): https://docs.inochi2d.com/en/latest/creator/getting-started.html
+- Inochi2D SDK(OpenGL 4.2/SPIR-V要件): https://github.com/Inochi2D/inochi2d
+- Inochi2D 0.9 Web(WASM/WebGL/WebGPU)計画・hiatus: https://inochi2d.com/
 - VTube Studio: https://store.steampowered.com/app/1325860/VTube_Studio/
 - nizima LIVE 料金: https://nizimalive.com/pricing/
 - E-mote: https://emote.mtwo.co.jp/support/faq/ , https://emote.mtwo.co.jp/products/
