@@ -200,6 +200,60 @@ GPUで変形してリアルタイム描画)なので、同程度のモデルで�
 「外部信号でリアルタイムに表情を動かすアバターランタイム」を欠く。この用途で現実的なのは
 やはり **Live2D(アバター系ランタイムを持つ)** か **Inochi2D系(VTuber特化のOSS)** の2択。
 
+## Live2DからInochi2Dへ乗り換えるべきか (判断メモ)
+
+「Live2D Free版の機能制約が大きいのでInochi2Dへ」という動機は妥当。ただし判断の前に
+事実関係を正確にしておく。
+
+**引用情報の補正(誤解しやすい点)**
+
+- 「Inox2D(WASM)でウェブ上で動かせる」→ **Inox2Dは現状プロトタイプで本番非推奨**。
+  公式が "not recommended to use in production" "purely for developers, not useful for
+  end users" と明記。新しめのモデルが使う **MeshGroup 機能は未対応**。WebGL描画の
+  サンプルはあるが、そのまま完成品として使える段階ではない。
+- 「Inochi Creator を Steam/itch.io から」→ その **Inochi Creator(本家)は開発休止中**。
+  実際に使うのは活発なフォークの **nijigenerate**。引用は旧名称ベース。
+- 「OpenGL 3.3でOK・軽い」→ ネイティブ版(nijigenerate/nijiexpose)の話。
+  **GPUの無いVPSのソフトウェアOpenGLで動くかは別問題**で要実測。
+
+**Live2D Free の制約と実コストの整理(この用途での実際)**
+
+- Editor FREE は変形デフォーマ/パラメータ数などに上限があり、凝ったモデルだと
+  PRO(月2,288円〜)が要る。ただし**シンプルな1体なら FREE でも十分作れる**ことは多い。
+- 組み込みSDK(本システムが使う pixi-live2d-display = Cubism Web SDK)は
+  **小規模事業者は無償**。個人〜小規模チャンネルなら費用ゼロで配信までいける。
+  売上が公式の基準を超えると出版/リリースライセンスが必要。
+- つまり「Live2Dは高い」は**規模が大きくなった場合の話**で、始めるだけなら
+  Live2Dも実質無料で完結できるケースが多い。
+
+**この用途(VPSのみでYouTube Live)での結論**
+
+- リギングを手元PCで行い、VPSは再生のみ、という運用は**どちらでも可能**。
+  争点は「VPS上でヘッドレスに確実に描画できるか」の一点。
+- 現状の確実性は **Live2D(WebGLをヘッドレスChromiumで描画=検証済み) > Inochi2D**。
+  Inochi2Dは (a)nijiexpose ネイティブOpenGL(GPU無しVPSで起動するか要実測) か
+  (b)Inox2D WASM(プロトタイプ) のどちらかで、**現時点では未検証・リスクあり**。
+- ライセンスの自由さ(完全無料・商用制限なし・OSS)は明確にInochi2Dの利点。
+  そこを最優先するなら乗り換える価値はある。
+
+**推奨する進め方(片方に賭けない)**
+
+本システムのオーバーレイは**描画方式に依存しない抽象パラメータ**
+(口の開き/目/眉/傾き/感情)でアバターを駆動している。よって Live2D を捨てずに
+**Inochi2D(Inox2D)レンダラを同じオーバーレイに追加し、設定で切替可能**にできる。
+手順:
+
+1. まず現行の Live2D 経路をそのまま維持(すでに動く)。
+2. 手元PCでテスト用モデルを1体リギング(nijigenerate、MeshGroupは避ける)。
+3. そのモデルで **Inox2D(WebGL) をブラウザソースで動かせるか VPS で実測**。
+   - 動けば理想(現行アーキテクチャそのままで完全OSS化)。
+   - 描画が不安定/機能不足なら nijiexpose+VMC 方式、または Live2D 継続を選ぶ。
+4. 実測で「確実に配信で使える」と確認できた方を本採用する。
+
+要するに、**乗り換え自体は妥当な検討だが、"実モデルでVPS描画が通ること"を確認して
+から確定すべき**。オーバーレイが renderer 非依存なので、確認作業に現行構成を壊す
+リスクは無い。
+
 ## Live2D Cubism と nizima LIVE の違い
 
 どちらもLive2D社の製品だが、**役割がまったく別**。混同しやすいので整理する。
@@ -247,6 +301,7 @@ GPUで変形してリアルタイム描画)なので、同程度のモデルで�
 - Inochi2D 0.9 Web(WASM/WebGL/WebGPU)計画・hiatus: https://inochi2d.com/
 - VMC(OSC)入力・vmc-d実装: https://github.com/Inochi2D/vmc-d , https://protocol.vmc.info/english.html
 - nijiexpose(トラッキング配信): https://github.com/nijigenerate/nijiexpose
+- Inox2D(WASM/WebGL・プロトタイプ状態): https://github.com/Inochi2D/inox2d , https://docs.inochi2d.com/en/latest/inox2d/about.html
 - VTube Studio: https://store.steampowered.com/app/1325860/VTube_Studio/
 - nizima LIVE 料金: https://nizimalive.com/pricing/
 - E-mote: https://emote.mtwo.co.jp/support/faq/ , https://emote.mtwo.co.jp/products/
