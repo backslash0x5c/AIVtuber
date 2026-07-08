@@ -47,36 +47,105 @@ YouTube Live (RTMP)
 
 ## インストール
 
+以下はまっさらな Ubuntu Server (22.04 / 24.04) にSSH接続した状態を想定した手順です。
+GUIは不要で、すべてコマンドラインで完結します。
+
+### ステップ0: リポジトリの取得
+
 ```bash
-git clone <repository-url>
-cd radio-streaming
+# 作業場所へ (ホームディレクトリ直下に置く例)
+cd ~
+
+# リポジトリをクローン
+git clone https://github.com/backslash0x5c/AIVtuber.git
+cd AIVtuber
+```
+
+以降のコマンドはすべて `~/AIVtuber` ディレクトリ内で実行します。
+
+### ステップ1: セットアップスクリプトの実行
+
+```bash
 ./setup.sh
 ```
 
-`setup.sh` が以下をすべて行います(冪等なので再実行可):
+`setup.sh` が以下をすべて自動で行います(冪等なので途中で失敗しても再実行可):
 
 1. APTパッケージ (ffmpeg, mpv, pulseaudio, xvfb, fonts-noto-cjk など)
 2. OBS Studio (公式PPA)
 3. Ollama
 4. VOICEVOX ENGINE (Dockerがあれば初回起動時にイメージ取得、無ければ `scripts/install_voicevox.sh` がLinux CPU版をダウンロード)
-5. Python仮想環境 + 依存パッケージ
+5. Python仮想環境 (`venv/`) + 依存パッケージ
 6. `.env` の生成 (obs-websocketパスワードを自動生成)
 7. systemdユーザーユニットの配置 + linger有効化 (SSHを切っても動き続ける)
 
-### セットアップ後の設定
+途中で `sudo` のパスワードを求められたら入力してください。回線状況によっては
+OBS/Ollama/VOICEVOX のダウンロードに数分〜十数分かかります。
+
+### ステップ2: LLMモデルの取得
 
 ```bash
-# LLMモデルの取得
+# .env で指定したモデル (既定 gemma3:1b) を取得
 ollama pull gemma3:1b
-
-# 必須設定の入力
-nano .env
-#   YOUTUBE_VIDEO_ID=<ライブ配信のビデオID>
-#   YOUTUBE_STREAM_KEY=<YouTube Studioの配信キー>
-
-# BGMを置く(任意。無ければ声のみで配信される)
-cp ~/music/*.mp3 bgm/
 ```
+
+別のモデルを使いたい場合は、先に `.env` の `OLLAMA_MODEL` を書き換えてから
+そのモデル名で `ollama pull` してください。
+
+### ステップ3: YouTube配信情報の設定
+
+YouTube Studio でライブ配信の枠を作成し、次の2つを取得します。
+
+- **ビデオID**: ライブ配信URL `https://www.youtube.com/watch?v=XXXXXXXXXXX` の
+  `XXXXXXXXXXX` 部分 (コメント取得に使用)
+- **ストリームキー**: YouTube Studio →「ライブ配信」→「ストリーム」タブに表示される
+  文字列 (配信先の指定に使用)
+
+`.env` を編集して入力します。
+
+```bash
+nano .env
+```
+
+```ini
+YOUTUBE_VIDEO_ID=XXXXXXXXXXX
+YOUTUBE_STREAM_KEY=xxxx-xxxx-xxxx-xxxx-xxxx
+```
+
+`OBS_WS_PASSWORD` は `setup.sh` が自動生成済みなので、通常は触る必要はありません
+(空欄だとOBSが起動しません)。話者やキャラクター設定など他の項目は任意で、
+`.env.example` にすべて説明があります。
+
+### ステップ4 (任意): BGMとアバターの配置
+
+```bash
+# BGM: 置かなくても声のみで配信は成立する。置くとシャッフルループ再生される
+cp ~/music/*.mp3 bgm/
+
+# アバター: 差分イラスト3枚 (base/mouth_open/eyes_closed) と puppet.json を置く
+#   → 「2Dアバターと表情・感情」の章を参照。未設定でも音声のみで配信は動く
+mkdir -p avatar/puppet
+# (手元PCで用意したPNGとpuppet.jsonを scp などで avatar/puppet/ へ転送)
+```
+
+### ステップ5: 各サービスが起動できるか事前確認 (任意だが推奨)
+
+本番起動の前に、依存サービスへ個別に疎通確認しておくと切り分けが楽です。
+
+```bash
+# 音声の仮想シンクを作成し、存在を確認
+./scripts/setup_audio.sh
+pactl list short sinks | grep radio_mix
+
+# VOICEVOX を手動起動して疎通確認 (別ターミナル or 一時的に)
+./scripts/run_voicevox.sh &
+curl http://127.0.0.1:50021/version   # バージョンが返ればOK
+
+# Ollama の疎通確認
+curl http://127.0.0.1:11434/api/tags  # モデル一覧のJSONが返ればOK
+```
+
+確認できたら、手動起動したVOICEVOXは一旦停止して構いません (この後 systemd が管理します)。
 
 ## 起動・停止
 
@@ -96,6 +165,20 @@ systemctl --user stop radio.target
 # OS起動時に自動起動 (setup.shでenable済み)
 systemctl --user enable radio.target
 ```
+
+### 初回起動後の確認
+
+```bash
+# 全ユニットが running / active になっているか
+systemctl --user status 'radio-*' --no-pager
+
+# 本体のログでエラーが出ていないか (Ctrl+Cで抜ける)
+journalctl --user -u radio-app -f
+```
+
+正常なら本体ログに「初期化完了。コメント待機中...」と表示され、YouTube Studio 側の
+プレビューに映像と音声が乗り始めます。オープニングの読み上げが聞こえれば
+音声経路もOKです。映像や音が出ない場合は末尾の「トラブルシューティング」を参照してください。
 
 デバッグ時は本体だけ手動起動もできます: `./run.sh`
 
@@ -270,7 +353,7 @@ sudo loginctl enable-linger $USER
 ## ファイル構成
 
 ```
-radio-streaming/
+AIVtuber/
 ├── app/                      # メインアプリ (Python / asyncio)
 │   ├── main.py               #   オーケストレータ・死活監視
 │   ├── config.py             #   .env 読み込み
