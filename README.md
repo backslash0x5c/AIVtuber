@@ -42,7 +42,9 @@ YouTube Live (RTMP)
 ## システム要件
 
 - Ubuntu Server 22.04 / 24.04 (GUI不要、SSH接続のみで運用可能)
+- CPUアーキテクチャ: x64 / arm64 の両対応 (VOICEVOXはCPUアーキを自動判定して取得)
 - メモリ 8GB以上推奨 (OBS + VOICEVOX + Ollamaを同居させるため)
+- **ディスク空き 10GB以上** (VOICEVOX ENGINEのダウンロード+展開に約6GB使う)
 - Python 3.10+
 
 ## インストール
@@ -305,6 +307,33 @@ curl -s http://127.0.0.1:50021/speakers | python3 -m json.tool
 - 発話中のBGM音量は `BGM_DUCK_PERCENT` (既定25%) で調整します
 
 ## トラブルシューティング
+
+### VOICEVOXのインストールが `curl: (23) Failure writing output to destination` で失敗する
+
+ダウンロード先の**空き容量が尽きた**ときのエラーです(多くはRAM上の `/tmp` が満杯)。
+本スクリプトは作業ディレクトリをリポジトリ配下(永続ディスク)に置き、不要な `.vvpp` は
+取得しないので、最新版に更新してから再実行してください。
+
+```bash
+# 空き容量の確認 (10GB以上が望ましい)
+df -h ~ /tmp
+
+# 失敗した残骸を掃除
+rm -rf ~/AIVtuber/.voicevox_dl /tmp/tmp.*   # /tmp.* は自分の作業残骸のみ
+
+# 最新スクリプトに更新して再実行
+cd ~/AIVtuber && git pull
+./scripts/install_voicevox.sh
+```
+
+ディスクを増やせない場合は、別の大きいディスクに逃がせます:
+
+```bash
+VOICEVOX_DL_DIR=/mnt/data/voicevox_dl ./scripts/install_voicevox.sh
+```
+
+Dockerが使える環境なら、そもそもこのダウンロードは不要です(初回起動時に
+`scripts/run_voicevox.sh` がイメージを取得します。ただしイメージのarm64対応は要確認)。
 
 ### 音が配信に乗らない
 

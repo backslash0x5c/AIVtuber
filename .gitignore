@@ -9,6 +9,8 @@ persona.txt
 
 # VOICEVOX ENGINE (install_voicevox.sh が展開する)
 voicevox_engine/
+# VOICEVOX ダウンロード作業ディレクトリ
+.voicevox_dl/
 
 # BGM (各自で配置する)
 bgm/*
