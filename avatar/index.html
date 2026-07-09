@@ -94,6 +94,12 @@
     opacity: 0; transition: opacity .35s; box-shadow: 0 4px 24px rgba(0,0,0,.4);
   }
   #subtitle.visible { opacity: 1; }
+
+  /* inochi2dモード: アバターはOBS側(画面キャプチャ)が描くため、
+     このページは字幕・コメント等のUIだけを透過背景で重ねる */
+  body.ui-only { background: transparent; }
+  body.ui-only .blob,
+  body.ui-only #avatar-wrap { display: none; }
 </style>
 </head>
 <body>
@@ -339,6 +345,12 @@
 
   // レンダラ選択
   fetch("/config").then((r) => r.json()).then(async (cfg) => {
+    if (cfg.avatar_mode === "inochi2d") {
+      // アバターはnijiexpose(OBSの画面キャプチャ)が担当。UIのみ透過表示
+      document.body.classList.add("ui-only");
+      hidePlaceholder();
+      return;
+    }
     if (cfg.live2d_model) {
       try {
         await setupLive2D(cfg.live2d_model);

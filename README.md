@@ -292,6 +292,52 @@ journalctl --user -u radio-app -f
 レイアウトや配色は `avatar/index.html` を直接編集してください。
 確認はローカルで `http://127.0.0.1:8500/` を開くだけです(SSHポートフォワード可)。
 
+### Inochi2Dモード (実験的・このブランチの追加機能)
+
+完全OSS(商用制限なし)の **Inochi2D系 (nijigenerate / nijiexpose)** でアバターを
+描画するモードです。ブラウザ描画の代わりに、ネイティブアプリ nijiexpose を
+Xvfb上で常駐させ、本アプリが **VMCプロトコル(OSC/UDP)** で口パク・まばたき・
+感情・首の傾きを毎フレーム送信して駆動します。OBSは画面キャプチャで
+アバターを取り込み、字幕・コメント等のUIは従来のオーバーレイが透過背景で重なります。
+
+```
+本アプリ ──VMC(UDP:39540)──> nijiexpose (Xvfb :99上で描画)
+   │                              │
+   │ (字幕・コメントUI)            └─ OBS: 画面キャプチャ(最背面)
+   └─ オーバーレイ ──────────────── OBS: ブラウザソース(透過・前面)
+```
+
+**重要な制約**: nijiexpose の公式Linuxビルドは **x86_64のみ**です(v1.0.0-beta2時点)。
+arm64 VPSでは動かないため、その場合はソースビルドするか `AVATAR_MODE=browser`
+(Live2D/パペット)を使ってください。また、GPUの無いVPSではソフトウェアOpenGL
+(llvmpipe)で起動できるかの実測が必要です。
+
+#### セットアップ手順
+
+1. **手元PCでのモデル準備** (ここだけGUI作業):
+   - [nijigenerate](https://github.com/nijigenerate/nijigenerate) でイラストをリギングし、
+     パペット(`.inp`)を書き出す
+   - 手元PCの nijiexpose でモデルを読み込み、**VMC受信の有効化**と
+     **トラッキング値→パラメータの紐づけ**を設定する。紐づけ対象:
+     `A`(口の開き) / `Blink`(まばたき) / `Joy` `Sorrow` `Angry` `Surprised` `Shy`(感情) /
+     頭ボーンZ回転(首の傾き)
+2. **VPSへの導入**:
+   ```bash
+   ./scripts/install_nijiexpose.sh
+   # モデルと設定を手元PCからコピー (パスは手元の環境に合わせる)
+   scp -r ~/.config/nijiexpose vps:~/.config/
+   ```
+3. **設定と起動**:
+   ```bash
+   # .env に追記
+   #   AVATAR_MODE=inochi2d
+   systemctl --user enable --now radio-nijiexpose
+   systemctl --user restart radio-app radio-obs
+   ```
+
+うまく動かない場合は `journalctl --user -u radio-nijiexpose -f` で起動ログを確認
+してください(OpenGL初期化失敗ならGPU付きVPSかbrowserモードへの切替が必要です)。
+
 ### 音声
 
 ```bash

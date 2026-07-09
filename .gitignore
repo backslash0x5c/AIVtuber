@@ -9,6 +9,8 @@ persona.txt
 
 # VOICEVOX ENGINE (install_voicevox.sh が展開する)
 voicevox_engine/
+# nijiexpose (install_nijiexpose.sh が展開する)
+nijiexpose/
 # VOICEVOX ダウンロード作業ディレクトリ
 .voicevox_dl/
 

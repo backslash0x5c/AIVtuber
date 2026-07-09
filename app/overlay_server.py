@@ -49,7 +49,7 @@ class OverlayServer:
         return web.FileResponse(AVATAR_DIR / "index.html")
 
     async def _config(self, _request: web.Request) -> web.Response:
-        """オーバーレイページ向けの設定 (Live2Dモデルの有無など)"""
+        """オーバーレイページ向けの設定 (描画モード・Live2Dモデルの有無など)"""
         live2d_url = None
         if self.cfg.LIVE2D_MODEL:
             model_path = AVATAR_DIR / self.cfg.LIVE2D_MODEL
@@ -57,7 +57,10 @@ class OverlayServer:
                 live2d_url = f"/static/{self.cfg.LIVE2D_MODEL}"
             else:
                 logger.warning("LIVE2D_MODEL が見つかりません: %s", model_path)
-        return web.json_response({"live2d_model": live2d_url})
+        return web.json_response({
+            "avatar_mode": self.cfg.AVATAR_MODE,
+            "live2d_model": live2d_url,
+        })
 
     async def _ws_handler(self, request: web.Request) -> web.WebSocketResponse:
         ws = web.WebSocketResponse(heartbeat=30)

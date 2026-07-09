@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 SCENE_NAME = "Radio"
 BROWSER_INPUT = "Avatar"
 AUDIO_INPUT = "RadioMix"
+SCREEN_INPUT = "AvatarScreen"  # inochi2dモード: Xvfb画面(nijiexpose)のキャプチャ
 
 
 class ObsController:
@@ -83,6 +84,26 @@ class ObsController:
         return any(i["inputName"] == name for i in inputs)
 
     def _setup_sources(self):
+        # inochi2dモード: nijiexposeが描画しているXvfb画面を最背面に敷く
+        if self.cfg.AVATAR_MODE == "inochi2d":
+            if not self._input_exists(SCREEN_INPUT):
+                self._send("CreateInput", {
+                    "sceneName": SCENE_NAME,
+                    "inputName": SCREEN_INPUT,
+                    "inputKind": "xshm_input",
+                    "inputSettings": {"screen": 0, "show_cursor": False},
+                    "sceneItemEnabled": True,
+                })
+                logger.info("画面キャプチャ %s を作成しました", SCREEN_INPUT)
+            item_id = self._send("GetSceneItemId", {
+                "sceneName": SCENE_NAME, "sourceName": SCREEN_INPUT,
+            }).scene_item_id
+            self._send("SetSceneItemIndex", {
+                "sceneName": SCENE_NAME,
+                "sceneItemId": item_id,
+                "sceneItemIndex": 0,  # 最背面(オーバーレイUIより下)
+            })
+
         overlay_url = f"http://{self.cfg.OVERLAY_HOST}:{self.cfg.OVERLAY_PORT}/"
         if not self._input_exists(BROWSER_INPUT):
             self._send("CreateInput", {

@@ -13,6 +13,7 @@ import signal
 import time
 
 from .audio import ENVELOPE_FRAME_MS, AudioMixer, mouth_envelope
+from .avatar_driver import AvatarDriver
 from .chat_source import ChatMessage, ChatSource
 from .config import Config
 from .llm import OllamaClient
@@ -33,6 +34,9 @@ class RadioApp:
         self.llm = OllamaClient(self.cfg)
         self.tts = VoicevoxClient(self.cfg)
         self.obs = ObsController(self.cfg) if self.cfg.OBS_ENABLED else None
+        # inochi2dモード: サーバ側で口パク/表情を計算しVMCでnijiexposeへ送る
+        self.driver = AvatarDriver(self.cfg) if self.cfg.AVATAR_MODE == "inochi2d" else None
+        self._driver_task: asyncio.Task | None = None
         self.queue: asyncio.PriorityQueue = asyncio.PriorityQueue()
         self.chat: ChatSource | None = None
         self.last_activity = time.time()
@@ -61,6 +65,9 @@ class RadioApp:
             await asyncio.to_thread(self.obs.setup)
             if self.cfg.AUTO_START_STREAM:
                 await asyncio.to_thread(self.obs.ensure_streaming)
+
+        if self.driver:
+            self._driver_task = asyncio.create_task(self.driver.run())
 
         self.chat = ChatSource(self.cfg, asyncio.get_running_loop(), self.queue)
         self.chat.start()
@@ -96,9 +103,13 @@ class RadioApp:
             "envelope": envelope,
             "frame_ms": ENVELOPE_FRAME_MS,
         })
+        if self.driver:
+            self.driver.on_speech_start(envelope, ENVELOPE_FRAME_MS, emotion)
         try:
             await self.mixer.play_wav(wav)
         finally:
+            if self.driver:
+                self.driver.on_speech_end()
             await self.overlay.broadcast({"type": "speech", "state": "end"})
             await self.overlay.broadcast({"type": "status", "state": "idle"})
 
@@ -169,6 +180,9 @@ class RadioApp:
         self._stopping.set()
         if self.chat:
             self.chat.stop()
+        if self._driver_task:
+            self._driver_task.cancel()
+            await asyncio.gather(self._driver_task, return_exceptions=True)
         await self.overlay.stop()
         logger.info("停止しました")
 
