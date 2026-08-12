@@ -308,6 +308,34 @@ curl -s http://127.0.0.1:50021/speakers | python3 -m json.tool
 
 ## トラブルシューティング
 
+### まず状況をまとめて確認する
+
+```bash
+./scripts/diagnose.sh
+```
+
+各サービスの状態・OBSの有無とバージョン・待ち受けポート・Xvfb・OpenGL・
+`radio-obs` と `radio-app` のログをまとめて出力します(鍵やパスワードの値は伏せられます)。
+
+### 配信が始まらない / `ConnectionRefusedError` で OBS に繋がらない
+
+アプリのログに `OBSが 127.0.0.1:4455 で待ち受けていません` と出る場合、
+**OBS本体が起動できていません**(アプリ側の問題ではありません)。原因はOBSのログにあります。
+
+```bash
+journalctl --user -u radio-obs -n 50 --no-pager
+```
+
+よくある原因:
+
+- **OBSが未インストール** — `command -v obs` で確認。arm64環境では公式PPAに
+  パッケージが無いため、Ubuntu標準リポジトリ版が入っているか確認してください
+- **OpenGLの初期化失敗** — GPU非搭載VPSでは `Failed to initialize video` 等で
+  落ちることがあります。`sudo apt install -y mesa-utils libgl1-mesa-dri` を入れ、
+  `DISPLAY=:99 glxinfo | grep "OpenGL version"` が返るか確認してください
+  (`run_obs.sh` は `LIBGL_ALWAYS_SOFTWARE=1` を設定済みです)
+- **Xvfbが動いていない** — `systemctl --user status radio-xvfb` を確認
+
 ### `.env` が無い / `OBS_WS_PASSWORD` が見つからない
 
 `OBS_WS_PASSWORD` は **`setup.sh` がリポジトリ直下の `.env` に自動生成**します

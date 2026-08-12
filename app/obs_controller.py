@@ -29,8 +29,12 @@ class ObsController:
     # ---- 接続 -------------------------------------------------------
 
     def connect(self, retries: int = 30, interval: float = 2.0):
+        # obsws_python は接続失敗のたびにスタックトレースを出力し、待機中のログが
+        # 埋まって本当の原因(OBS側のログ)が読めなくなるため抑制する
+        logging.getLogger("obsws_python.baseclient").setLevel(logging.CRITICAL)
+
         last_error = None
-        for _ in range(retries):
+        for attempt in range(1, retries + 1):
             try:
                 self.client = obs.ReqClient(
                     host=self.cfg.OBS_WS_HOST,
@@ -43,8 +47,20 @@ class ObsController:
                 return
             except Exception as e:
                 last_error = e
+                # 毎回出すとうるさいので数回に1度だけ進捗を出す
+                if attempt == 1 or attempt % 10 == 0:
+                    logger.info(
+                        "OBSの起動を待っています... (%d/%d) %s",
+                        attempt, retries, type(e).__name__,
+                    )
                 time.sleep(interval)
-        raise ConnectionError(f"OBS(obs-websocket)に接続できません: {last_error}")
+
+        raise ConnectionError(
+            f"OBS(obs-websocket)に接続できません: {last_error}\n"
+            f"  OBSが {self.cfg.OBS_WS_HOST}:{self.cfg.OBS_WS_PORT} で待ち受けていません。\n"
+            f"  OBS側のログを確認してください: "
+            f"journalctl --user -u radio-obs -n 50 --no-pager"
+        )
 
     def _send(self, request: str, data: dict | None = None):
         return self.client.send(request, data)
