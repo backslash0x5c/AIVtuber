@@ -23,6 +23,18 @@ if [[ -z "${OBS_WS_PASSWORD:-}" ]]; then
 fi
 
 OBS_WS_PORT="${OBS_WS_PORT:-4455}"
+OBS_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/obs-studio"
+
+# --- 前回異常終了の痕跡を消す -------------------------------------------
+# OBSは起動中 obs-studio/safe_mode を置き、正常終了時に消す。クラッシュ後に
+# 残っていると次回起動で handleUncleanShutdown() が呼ばれ、
+#   blog("Crash or unclean shutdown detected"); ... crashWarning.exec();
+# とモーダルダイアログで待機する。ヘッドレスでは誰も押せず永久に固まり、
+# obs-websocket も起動しないままになる。無人運用では常に通常起動したいので消す。
+if [[ -f "$OBS_CONFIG_DIR/safe_mode" ]]; then
+    rm -f "$OBS_CONFIG_DIR/safe_mode"
+    echo "前回の異常終了マーカーを削除しました (クラッシュ確認ダイアログの回避)"
+fi
 
 # --- obs-websocket サーバーを有効化する ---------------------------------
 # 既存の設定は保持しつつ、必要なキーだけ更新する(冪等)

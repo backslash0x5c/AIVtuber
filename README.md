@@ -328,6 +328,17 @@ journalctl --user -u radio-obs -n 50 --no-pager
 
 よくある原因:
 
+- **OBSは起動しているのにログが `Crash or unclean shutdown detected` で止まる** —
+  前回クラッシュした痕跡(`~/.config/obs-studio/safe_mode`)が残っていると、OBSは
+  「前回異常終了しました」の**モーダルダイアログ**を表示して応答を待ちます。
+  ヘッドレスでは誰も押せないため永久に固まり、obs-websocketも起動しません
+  (CPU使用がほぼ0のまま、`systemctl stop` にも応答しないのが特徴)。
+  `run_obs.sh` が起動時にこのファイルを削除します。手動で消す場合:
+  ```bash
+  systemctl --user stop radio-obs
+  rm -f ~/.config/obs-studio/safe_mode
+  systemctl --user start radio-obs
+  ```
 - **OBSが数秒〜十数秒でクラッシュする(`GPU process isn't usable. Goodbye.`)** —
   ブラウザソースの中身はChromium(CEF)で、**root実行時は `--no-sandbox` が無いと
   子プロセスを起動できず**、OBSごと落ちます
