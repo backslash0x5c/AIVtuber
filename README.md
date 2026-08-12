@@ -330,7 +330,9 @@ cd ~/AIVtuber && ./setup.sh
 
 ```bash
 cp .env.example .env
-sed -i "s/^OBS_WS_PASSWORD=.*/OBS_WS_PASSWORD=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)/" .env
+WS_PW=$(head -c 256 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-24)
+sed -i "s/^OBS_WS_PASSWORD=.*/OBS_WS_PASSWORD=$WS_PW/" .env
+grep OBS_WS_PASSWORD .env   # 24文字入っていることを確認
 ```
 
 値は自分で決めた文字列でも構いません(OBSと本アプリが同じ値を使えばよいだけです)。

@@ -88,7 +88,8 @@ echo "展開中... ($FIRST_PART)"
 "$SEVENZIP" x -y "$FIRST_PART" >/dev/null
 
 # `run` 実行ファイルを含むディレクトリを探して配置する
-ENGINE_DIR=$(find "$WORK_DIR" -maxdepth 3 -type f -name run -printf '%h\n' | head -n1)
+# (`| head -n1` は find が SIGPIPE で死んで pipefail に引っかかるため -quit を使う)
+ENGINE_DIR=$(find "$WORK_DIR" -maxdepth 3 -type f -name run -printf '%h\n' -quit)
 if [[ -z "$ENGINE_DIR" ]]; then
     echo "エラー: 展開結果に run 実行ファイルが見つかりません" >&2
     exit 1

@@ -6,22 +6,43 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$REPO_DIR"
 
+# ランダムな英数字24文字を生成する。
+# 注意: `tr ... </dev/urandom | head -c 24` は head が先に終了して tr が SIGPIPE(141) で
+# 死ぬため、set -o pipefail 下ではスクリプトごと停止してしまう。
+# head を上流に置いて固定長だけ読み、tr は EOF まで読み切る形にしてSIGPIPEを避ける。
+gen_password() {
+    local raw
+    raw=$(head -c 256 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9')
+    if (( ${#raw} < 24 )); then
+        echo "エラー: パスワードの生成に失敗しました" >&2
+        return 1
+    fi
+    printf '%s' "${raw:0:24}"
+}
+
 # .env は依存関係が無く、かつ後続ステップが失敗しても手元に残したいので最初に作る
 # (巨大なダウンロードで中断しても OBS_WS_PASSWORD が生成済みになるように)
 echo "==== [1/7] .env の準備 ===="
 if [[ ! -f .env ]]; then
     cp .env.example .env
     # obs-websocket用のパスワードを自動生成
-    WS_PW=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)
+    WS_PW=$(gen_password)
     sed -i "s/^OBS_WS_PASSWORD=.*/OBS_WS_PASSWORD=$WS_PW/" .env
     echo ".env を作成し、OBS_WS_PASSWORD を自動生成しました: $REPO_DIR/.env"
 else
     echo ".env は既に存在します"
     if ! grep -qE '^OBS_WS_PASSWORD=.+' .env; then
-        WS_PW=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)
+        WS_PW=$(gen_password)
         sed -i "s|^OBS_WS_PASSWORD=.*|OBS_WS_PASSWORD=$WS_PW|" .env
         echo "  OBS_WS_PASSWORD が空だったので自動生成しました"
     fi
+fi
+
+# 生成できたことをここで必ず検証する (空のまま進むとOBSが起動しないため)
+if ! grep -qE '^OBS_WS_PASSWORD=.+' .env; then
+    echo "エラー: OBS_WS_PASSWORD を .env に書き込めませんでした" >&2
+    echo "       手動で設定してください: nano $REPO_DIR/.env" >&2
+    exit 1
 fi
 
 echo "==== [2/7] APTパッケージのインストール ===="
