@@ -32,6 +32,27 @@ else
     echo "     arm64環境では公式PPAにパッケージが無いことがあります"
 fi
 
+hr "obs-websocket の設定 (server_enabled が true でないとポートを開かない)"
+WS_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/obs-studio/plugin_config/obs-websocket/config.json"
+if [[ -f "$WS_CONFIG" ]]; then
+    echo "  ファイル: $WS_CONFIG"
+    python3 -c '
+import json, sys
+try:
+    c = json.load(open(sys.argv[1]))
+except Exception as e:
+    print("  ❌ 読み込めません:", e); raise SystemExit
+enabled = c.get("server_enabled")
+print("  server_enabled :", enabled, "" if enabled else "  ← ❌ これが false だと待ち受けません")
+print("  server_port    :", c.get("server_port"))
+print("  auth_required  :", c.get("auth_required"))
+print("  server_password:", "***設定済み***" if c.get("server_password") else "❌未設定")
+' "$WS_CONFIG" 2>/dev/null || echo "  (解析に失敗しました)"
+else
+    echo "  ❌ 設定ファイルがありません: $WS_CONFIG"
+    echo "     run_obs.sh が起動時に生成します"
+fi
+
 hr "待ち受けポート (4455=obs-websocket, 8500=オーバーレイ)"
 if command -v ss >/dev/null; then
     ss -ltnp 2>/dev/null | grep -E ':(4455|8500|50021|11434)\b' || echo "  (該当ポートの待ち受けなし)"

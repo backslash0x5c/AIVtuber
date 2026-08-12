@@ -328,6 +328,15 @@ journalctl --user -u radio-obs -n 50 --no-pager
 
 よくある原因:
 
+- **obs-websocketのサーバーが無効** — OBSは起動しているのに4455番が待ち受けに
+  現れない場合はこれです。`--websocket_port` / `--websocket_password` は値を
+  上書きするだけで**サーバーを有効化しません**(`server_enabled` の既定値は false)。
+  `run_obs.sh` が起動時に
+  `~/.config/obs-studio/plugin_config/obs-websocket/config.json` へ
+  `server_enabled: true` を書き込むので、**OBSを再起動**してください:
+  ```bash
+  systemctl --user restart radio-obs
+  ```
 - **OBSが未インストール** — `command -v obs` で確認。arm64環境では公式PPAに
   パッケージが無いため、Ubuntu標準リポジトリ版が入っているか確認してください
 - **OpenGLの初期化失敗** — GPU非搭載VPSでは `Failed to initialize video` 等で
