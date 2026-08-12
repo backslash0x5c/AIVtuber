@@ -328,6 +328,16 @@ journalctl --user -u radio-obs -n 50 --no-pager
 
 よくある原因:
 
+- **OBSが数秒〜十数秒でクラッシュする(`GPU process isn't usable. Goodbye.`)** —
+  ブラウザソースの中身はChromium(CEF)で、**root実行時は `--no-sandbox` が無いと
+  子プロセスを起動できず**、OBSごと落ちます
+  (`Running as root without --no-sandbox is not supported`)。
+  `run_obs.sh` はroot実行を検出して自動で付与します。`git pull` 後に再起動してください。
+  それでもGPUプロセスが落ちる場合は `.env` に次を追加します:
+  ```ini
+  OBS_EXTRA_ARGS=--disable-gpu
+  ```
+  (ただしWebGLがソフトウェア描画になるため、Live2Dを使う場合は動作を確認してください)
 - **obs-websocketのサーバーが無効** — OBSは起動しているのに4455番が待ち受けに
   現れない場合はこれです。`--websocket_port` / `--websocket_password` は値を
   上書きするだけで**サーバーを有効化しません**(`server_enabled` の既定値は false)。

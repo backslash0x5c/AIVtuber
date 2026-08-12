@@ -60,8 +60,34 @@ export DISPLAY="${DISPLAY:-:99}"
 # GPUの無いVPSではソフトウェアレンダリングを使う
 export LIBGL_ALWAYS_SOFTWARE=1
 
+# --- CEF(ブラウザソース)向けの追加フラグ --------------------------------
+# ブラウザソースの中身はChromium(CEF)。Chromiumはroot実行時に
+# sandboxを無効化しないと子プロセスを起動できず
+#   "Running as root without --no-sandbox is not supported"
+# となり、最終的に "GPU process isn't usable. Goodbye." でOBSごと落ちる。
+# OBSに渡した引数はそのままCEFにも渡るため、ここで付与する。
+EXTRA_ARGS=()
+case "${OBS_NO_SANDBOX:-auto}" in
+    true)  NEED_NOSANDBOX=1 ;;
+    false) NEED_NOSANDBOX=0 ;;
+    *)     [[ $EUID -eq 0 ]] && NEED_NOSANDBOX=1 || NEED_NOSANDBOX=0 ;;  # auto: root なら付ける
+esac
+if [[ "$NEED_NOSANDBOX" == "1" ]]; then
+    EXTRA_ARGS+=(--no-sandbox)
+    echo "CEF(ブラウザソース)向けに --no-sandbox を付与します (root実行のため)"
+fi
+
+# 追加で渡したいフラグがあれば .env の OBS_EXTRA_ARGS で指定する
+# 例: ブラウザソースのGPUプロセスがまだ落ちる場合 OBS_EXTRA_ARGS="--disable-gpu"
+if [[ -n "${OBS_EXTRA_ARGS:-}" ]]; then
+    read -r -a _user_args <<< "$OBS_EXTRA_ARGS"
+    EXTRA_ARGS+=("${_user_args[@]}")
+    echo "追加フラグ: ${_user_args[*]}"
+fi
+
 exec obs \
     --disable-shutdown-check \
     --disable-missing-files-check \
     --websocket_port "$OBS_WS_PORT" \
-    --websocket_password "$OBS_WS_PASSWORD"
+    --websocket_password "$OBS_WS_PASSWORD" \
+    "${EXTRA_ARGS[@]}"

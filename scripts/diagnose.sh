@@ -32,6 +32,21 @@ else
     echo "     arm64環境では公式PPAにパッケージが無いことがあります"
 fi
 
+hr "OBSの起動引数 (root実行では --no-sandbox が必須)"
+obs_cmd=$(pgrep -a '^obs$' 2>/dev/null | head -n1)
+[[ -z "$obs_cmd" ]] && obs_cmd=$(pgrep -af '/usr/bin/obs' 2>/dev/null | head -n1)
+if [[ -n "$obs_cmd" ]]; then
+    echo "  ${obs_cmd//--websocket_password */--websocket_password ***}"
+    if [[ $EUID -eq 0 && "$obs_cmd" != *--no-sandbox* ]]; then
+        echo "  ❌ root実行なのに --no-sandbox がありません"
+        echo "     → ブラウザソース(CEF)の子プロセスが起動できずクラッシュします"
+    elif [[ "$obs_cmd" == *--no-sandbox* ]]; then
+        echo "  ✓ --no-sandbox あり"
+    fi
+else
+    echo "  (OBSプロセスが見つかりません)"
+fi
+
 hr "obs-websocket の設定 (server_enabled が true でないとポートを開かない)"
 WS_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/obs-studio/plugin_config/obs-websocket/config.json"
 if [[ -f "$WS_CONFIG" ]]; then
