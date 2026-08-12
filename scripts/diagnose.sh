@@ -33,16 +33,18 @@ else
 fi
 
 hr "前回異常終了マーカー (残っているとOBSがダイアログで固まる)"
-SAFE_MODE_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/obs-studio/safe_mode"
-if [[ -f "$SAFE_MODE_FILE" ]]; then
-    if pgrep -x obs >/dev/null; then
-        echo "  あり (OBS実行中なので正常。終了時に消えます)"
-    else
-        echo "  ❌ あり かつ OBSは停止中 = 前回クラッシュした痕跡"
-        echo "     次回起動時にクラッシュ確認ダイアログで固まります: rm -f '$SAFE_MODE_FILE'"
-    fi
-else
-    echo "  なし ✓"
+OBS_CFG="${XDG_CONFIG_HOME:-$HOME/.config}/obs-studio"
+n_sentinel=$(find "$OBS_CFG/.sentinel" -maxdepth 1 -name 'run_*' -type f 2>/dev/null | wc -l)
+running=$(pgrep -x obs >/dev/null && echo yes || echo no)
+echo "  .sentinel/run_* : ${n_sentinel}件   (OBS実行中: $running)"
+if [[ "$n_sentinel" -gt 0 && "$running" == "no" ]]; then
+    echo "  ❌ OBSは停止中なのに残っている = 前回クラッシュ/強制終了の痕跡"
+    echo "     次回起動時にクラッシュ確認ダイアログで固まります:"
+    echo "       rm -f '$OBS_CFG/.sentinel/'run_*"
+elif [[ "$n_sentinel" -gt 1 ]]; then
+    echo "  ⚠ 実行中の1件を超えています(古い痕跡が残っている可能性)"
+elif [[ "$n_sentinel" -eq 0 ]]; then
+    echo "  ✓ 痕跡なし"
 fi
 
 hr "OBSの起動引数 (root実行では --no-sandbox が必須)"
