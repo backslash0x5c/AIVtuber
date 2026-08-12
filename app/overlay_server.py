@@ -15,6 +15,29 @@ logger = logging.getLogger(__name__)
 
 AVATAR_DIR = ROOT_DIR / "avatar"
 
+# 1枚絵を自動検出するときに探すファイル名 (AVATAR_IMAGE 未指定時)
+STILL_IMAGE_CANDIDATES = (
+    "avatar.png", "avatar.jpg", "avatar.jpeg", "avatar.webp", "avatar.gif",
+)
+
+
+def _static_url(rel_path: str) -> str | None:
+    """avatar/ 配下の実在ファイルを /static のURLに変換する。
+
+    ディレクトリ外を指す指定 (../ など) は拒否する。
+    """
+    if not rel_path:
+        return None
+    try:
+        target = (AVATAR_DIR / rel_path).resolve()
+        target.relative_to(AVATAR_DIR.resolve())   # 配下かどうか
+    except (ValueError, OSError):
+        logger.warning("avatar/ の外は指定できません: %s", rel_path)
+        return None
+    if not target.is_file():
+        return None
+    return "/static/" + target.relative_to(AVATAR_DIR.resolve()).as_posix()
+
 
 class OverlayServer:
     def __init__(self, cfg: type[Config] = Config):
@@ -49,7 +72,7 @@ class OverlayServer:
         return web.FileResponse(AVATAR_DIR / "index.html")
 
     async def _config(self, _request: web.Request) -> web.Response:
-        """オーバーレイページ向けの設定 (Live2Dモデルの有無など)"""
+        """オーバーレイページ向けの設定 (Live2Dモデル・1枚絵の有無など)"""
         live2d_url = None
         if self.cfg.LIVE2D_MODEL:
             model_path = AVATAR_DIR / self.cfg.LIVE2D_MODEL
@@ -57,7 +80,26 @@ class OverlayServer:
                 live2d_url = f"/static/{self.cfg.LIVE2D_MODEL}"
             else:
                 logger.warning("LIVE2D_MODEL が見つかりません: %s", model_path)
-        return web.json_response({"live2d_model": live2d_url})
+
+        # 1枚絵: 明示指定があればそれを使い、無ければ既定の名前を探す
+        still_url = None
+        if self.cfg.AVATAR_IMAGE:
+            still_url = _static_url(self.cfg.AVATAR_IMAGE)
+            if still_url is None:
+                logger.warning(
+                    "AVATAR_IMAGE が見つかりません: %s",
+                    AVATAR_DIR / self.cfg.AVATAR_IMAGE,
+                )
+        if still_url is None:
+            for name in STILL_IMAGE_CANDIDATES:
+                still_url = _static_url(name)
+                if still_url:
+                    break
+
+        return web.json_response({
+            "live2d_model": live2d_url,
+            "avatar_image": still_url,
+        })
 
     async def _ws_handler(self, request: web.Request) -> web.WebSocketResponse:
         ws = web.WebSocketResponse(heartbeat=30)

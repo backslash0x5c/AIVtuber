@@ -290,7 +290,6 @@
   // 2D/3Dモデルを用意するまでの繋ぎ。口パクはできないが、揺れ・呼吸・首の傾き・
   // 発話中の弾みで「立っているだけの絵」にならないようにする。
   let singleMode = false;
-  const imgSingle = "/static/avatar.png";
   const singleRenderer = (p, t) => {
     const swayX = Math.sin(t * 0.00042) * 6 + Math.sin(t * 0.00013) * 4;
     const breath = Math.sin(t / 1700) * 5;
@@ -384,8 +383,14 @@
       useStillImage(imgClosed, true);
       return;
     }
-    // 1枚しか無くても表示する (avatar.png / avatar_closed.png のどちらでも可)
-    for (const url of [imgSingle, imgClosed, imgOpen]) {
+    // 1枚絵 (サーバ側が AVATAR_IMAGE か avatar.* を解決して渡してくる。
+    //        任意のファイル名・形式が使える)
+    if (cfg.avatar_image) {
+      useStillImage(cfg.avatar_image, false);
+      return;
+    }
+    // 口パク用の片方だけが置かれている場合も1枚絵として表示する
+    for (const url of [imgClosed, imgOpen]) {
       if (await exists(url)) {
         useStillImage(url, false);
         return;

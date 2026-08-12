@@ -248,21 +248,29 @@ journalctl --user -u radio-app -f
    python3 scripts/validate_puppet.py
    ```
 3. **PNG立ち絵(2枚)** — `avatar/avatar_closed.png` / `avatar_open.png` の2枚だけでも動きます(素材の制約上、口パクのみ2値)
-4. **1枚絵** — `avatar/avatar.png` を**1枚置くだけ**。2D/3Dモデルを用意するまでの繋ぎに使えます
+4. **1枚絵** — 立ち絵を**1枚置くだけ**。ファイル名は自由でJPG等も可(`AVATAR_IMAGE` で指定、未指定なら `avatar/avatar.*` を自動検出)。2D/3Dモデルを用意するまでの繋ぎに使えます
 
 ### とりあえず1枚絵を表示する (最速)
 
-モデルの準備前でも、立ち絵を1枚置けばすぐ画面に出せます。
+モデルの準備前でも、立ち絵を1枚置けばすぐ画面に出せます。**ファイル名は自由**で、
+PNG以外(JPG/JPEG/WebP/GIF)も使えます。
 
 ```bash
-# 手元PCから転送するか、サーバ上に直接配置する
-scp avatar.png サーバ:~/AIVtuber/avatar/avatar.png
+# 好きな名前で avatar/ に置く
+scp 好きな名前.jpg サーバ:~/AIVtuber/avatar/
 
-# ブラウザソースを更新 (アプリ再起動でもOK)
+# .env でその名前を指定
+nano .env
+#   AVATAR_IMAGE=好きな名前.jpg
+
 systemctl --user restart radio-app
 ```
 
-- 背景透過PNG推奨(不透明でも表示はされます)。縦長のバストアップが収まりやすいサイズです
+`AVATAR_IMAGE` を指定しない場合は、`avatar/avatar.png` → `.jpg` → `.jpeg` →
+`.webp` → `.gif` の順に自動で探します。この名前で置くなら `.env` の編集は不要です。
+
+- 背景透過PNG推奨(不透明でも表示はされます。JPGは透過できないため背景が四角く出ます)。
+  縦長のバストアップが収まりやすいサイズです
 - 口パクはできませんが、**揺れ・呼吸・首の傾き・感情による傾き・発話中の弾み**は付きます
   (完全な静止画にはなりません)
 - `avatar_closed.png` と `avatar_open.png` を両方置くと、自動的に口パクありの2枚モードに切り替わります

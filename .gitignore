@@ -16,10 +16,12 @@ voicevox_engine/
 bgm/*
 !bgm/.gitkeep
 
-# カスタム立ち絵 (各自で配置する)
-avatar/avatar.png
-avatar/avatar_open.png
-avatar/avatar_closed.png
+# カスタム立ち絵 (各自で配置する。任意のファイル名を使えるので画像全般を除外)
+avatar/*.png
+avatar/*.jpg
+avatar/*.jpeg
+avatar/*.webp
+avatar/*.gif
 
 # Live2Dモデル (各自で配置する)
 avatar/live2d/

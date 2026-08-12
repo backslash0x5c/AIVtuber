@@ -73,6 +73,10 @@ class Config:
     # avatar/ からの相対パスで .model3.json を指定するとLive2D描画になる
     # 例: LIVE2D_MODEL=live2d/hiyori/hiyori.model3.json
     LIVE2D_MODEL = _str("LIVE2D_MODEL")
+    # 1枚絵の立ち絵。avatar/ からの相対パスで任意のファイル名・形式を指定できる
+    # 例: AVATAR_IMAGE=yume_tachie.jpg
+    # 未指定なら avatar/avatar.{png,jpg,jpeg,webp,gif} を自動で探す
+    AVATAR_IMAGE = _str("AVATAR_IMAGE")
 
     # --- 挙動 ---
     CHARACTER_NAME = _str("CHARACTER_NAME", "ゆめ")
