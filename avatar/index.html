@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>AI Radio Overlay</title>
+<style>
+  :root {
+    --accent: #ff8a5c;
+    --accent2: #f2a2c8;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    font-family: "Noto Sans CJK JP", "Noto Sans JP", sans-serif;
+    background: linear-gradient(160deg, #1b1035 0%, #2a1a55 55%, #3c2a6e 100%);
+    position: relative;
+  }
+
+  /* ふわふわ漂う背景の光 */
+  .blob {
+    position: absolute; border-radius: 50%; filter: blur(60px); opacity: .35;
+    animation: drift 24s ease-in-out infinite alternate;
+  }
+  .blob.b1 { width: 40vw; height: 40vw; background: #7c4dff; top: -12vw; left: -8vw; }
+  .blob.b2 { width: 34vw; height: 34vw; background: #ff8ac2; bottom: -10vw; right: 22vw; animation-delay: -8s; }
+  .blob.b3 { width: 26vw; height: 26vw; background: #4dc3ff; top: 22vh; right: -6vw; animation-delay: -16s; }
+  @keyframes drift {
+    from { transform: translate(0, 0) scale(1); }
+    to   { transform: translate(4vw, -3vh) scale(1.15); }
+  }
+
+  /* タイトル */
+  .logo {
+    position: absolute; top: 3.5vh; left: 3vw; color: #fff; z-index: 3;
+  }
+  .logo h1 { font-size: 3.2vh; letter-spacing: .2em; font-weight: 800; }
+  .logo p  { font-size: 1.8vh; opacity: .7; margin-top: .5vh; letter-spacing: .1em; }
+  .clock {
+    position: absolute; top: 3.5vh; right: 3vw; color: #fff; z-index: 3;
+    font-size: 3vh; font-weight: 700; font-variant-numeric: tabular-nums; opacity: .85;
+  }
+
+  /* アバター (パペット / PNG立ち絵の置き場。バストアップを右下に配置) */
+  #avatar-wrap {
+    position: absolute; right: 3vw; bottom: 0; width: 62vh; height: 78vh; z-index: 2;
+  }
+  #avatar-wrap img { width: 100%; height: 100%; }
+  #avatar-img { display: none; object-fit: contain; transform-origin: 50% 100%; }
+
+  /* アバター未設定時の案内 (アセットを置くと自動で消える) */
+  #avatar-placeholder {
+    position: absolute; inset: auto 0 12vh 0; margin: 0 auto; width: 80%;
+    background: rgba(255,255,255,.08); border: 1px dashed rgba(255,255,255,.35);
+    border-radius: 1.6vh; padding: 2.4vh; color: rgba(255,255,255,.75);
+    font-size: 1.9vh; line-height: 1.8; text-align: center;
+  }
+  #avatar-placeholder code {
+    font-family: monospace; background: rgba(255,255,255,.12);
+    padding: .2vh .6vh; border-radius: .5vh;
+  }
+
+  /* Live2D 用キャンバス */
+  #live2d-canvas {
+    position: absolute; right: 0; bottom: 0; width: 100vw; height: 100vh;
+    z-index: 2; display: none; pointer-events: none;
+  }
+
+  /* コメント表示 */
+  #comment-card {
+    position: absolute; left: 3vw; top: 16vh; max-width: 44vw; z-index: 3;
+    background: rgba(255,255,255,.94); border-radius: 1.6vh; padding: 2vh 2.4vh;
+    box-shadow: 0 6px 30px rgba(0,0,0,.35);
+    opacity: 0; transform: translateY(1.5vh); transition: all .4s ease;
+  }
+  #comment-card.visible { opacity: 1; transform: translateY(0); }
+  #comment-card.superchat {
+    background: linear-gradient(135deg, #ffe9a8, #ffd24d);
+    box-shadow: 0 6px 34px rgba(255,200,60,.55);
+  }
+  #comment-author { font-size: 2vh; font-weight: 700; color: #7a4de0; }
+  #comment-card.superchat #comment-author { color: #7a5200; }
+  #comment-amount { font-size: 2vh; font-weight: 800; color: #b0093c; margin-left: 1vw; }
+  #comment-text { font-size: 2.4vh; color: #222; margin-top: .8vh; line-height: 1.5; word-break: break-word; }
+
+  /* 字幕(返答) */
+  #subtitle-wrap {
+    position: absolute; left: 50%; bottom: 4.5vh; transform: translateX(-50%);
+    width: 88vw; z-index: 4; display: flex; justify-content: center;
+  }
+  #subtitle {
+    background: rgba(15, 8, 40, .82); border: 2px solid rgba(255,138,92,.7);
+    color: #fff; font-size: 3vh; line-height: 1.6; padding: 1.8vh 3vw;
+    border-radius: 2vh; max-width: 100%;
+    opacity: 0; transition: opacity .35s; box-shadow: 0 4px 24px rgba(0,0,0,.4);
+  }
+  #subtitle.visible { opacity: 1; }
+</style>
+</head>
+<body>
+  <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+
+  <div class="logo">
+    <h1>24H AI RADIO</h1>
+    <p>コメント読み上げ中 — お気軽にどうぞ</p>
+  </div>
+  <div class="clock" id="clock">--:--</div>
+
+  <canvas id="live2d-canvas"></canvas>
+
+  <div id="avatar-wrap">
+    <!-- 立ち絵PNG2枚モード用 -->
+    <img id="avatar-img" alt="avatar">
+    <div id="avatar-placeholder">
+      アバター未設定<br>
+      いちばん簡単なのは <code>avatar/avatar.png</code> に立ち絵を1枚置くだけ。<br>
+      口パクさせるなら <code>avatar/puppet/</code> にレイヤーPNGと <code>puppet.json</code>、<br>
+      またはLive2Dモデル(<code>LIVE2D_MODEL</code>)を設定してください。<br>
+      詳しくは README「2Dアバターと表情・感情」を参照。
+    </div>
+  </div>
+
+  <div id="comment-card">
+    <span id="comment-author"></span><span id="comment-amount"></span>
+    <div id="comment-text"></div>
+  </div>
+
+  <div id="subtitle-wrap"><div id="subtitle"></div></div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+
+  // ---- 時計 ----
+  const tick = () => {
+    const d = new Date();
+    $("clock").textContent =
+      String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+  };
+  tick(); setInterval(tick, 5000);
+
+  // =====================================================================
+  //  表情パラメータリグ (連続値を毎フレーム指数補間 → コマ送りにならない)
+  // =====================================================================
+  const P = {
+    mouth: 0,      // 口の開き 0..1 (音声エンベロープ駆動)
+    smile: 0.35,   // 口角 -1(への字)..1(にっこり)
+    eyeOpen: 1,    // 目の開き 0..1.15
+    browY: 0,      // 眉の高さ -8(上げ)..6(下げ)
+    browAngle: 0,  // 眉の角度 -1(困り)..1(怒り)
+    blush: 0.4,    // 頬の赤み 0..1
+    tilt: 0,       // 首の傾き deg
+    lookX: 0,      // 視線 -1..1
+  };
+  const T = { ...P };
+
+  const EMOTIONS = {
+    neutral:   { smile: 0.35, eyeOpen: 1.0,  browY: 0,  browAngle: 0,    blush: 0.4,  tilt: 0,  lookX: 0 },
+    happy:     { smile: 1.0,  eyeOpen: 0.8,  browY: -2, browAngle: 0,    blush: 0.75, tilt: 3,  lookX: 0 },
+    sad:       { smile: -0.6, eyeOpen: 0.6,  browY: 2,  browAngle: -1,   blush: 0.3,  tilt: -3, lookX: -0.3 },
+    angry:     { smile: -0.4, eyeOpen: 0.85, browY: 3,  browAngle: 1,    blush: 0.35, tilt: 0,  lookX: 0 },
+    surprised: { smile: 0.15, eyeOpen: 1.15, browY: -7, browAngle: 0,    blush: 0.5,  tilt: 0,  lookX: 0 },
+    shy:       { smile: 0.5,  eyeOpen: 0.7,  browY: 1,  browAngle: -0.5, blush: 1.0,  tilt: 4,  lookX: 0.6 },
+  };
+
+  // 感情差分レイヤーのクロスフェード用ブレンド値 (0..1を滑らかに補間)
+  let currentEmotion = "neutral";
+  const emotionBlend = {};
+  for (const name of Object.keys(EMOTIONS)) emotionBlend[name] = name === "neutral" ? 1 : 0;
+
+  let emotionTimer = null;
+  const setEmotion = (name, holdMs = 8000) => {
+    if (!EMOTIONS[name]) name = "neutral";
+    currentEmotion = name;
+    Object.assign(T, EMOTIONS[name]);
+    clearTimeout(emotionTimer);
+    if (name !== "neutral") {
+      emotionTimer = setTimeout(() => setEmotion("neutral"), holdMs);
+    }
+  };
+
+  // ---- リップシンク (音量エンベロープ) ----
+  let envelope = null, envFrameMs = 50, envStart = 0, speaking = false;
+  const mouthTarget = (now) => {
+    if (!speaking || !envelope || envelope.length === 0) return 0;
+    const pos = (now - envStart) / envFrameMs;
+    const i = Math.floor(pos);
+    if (i < 0 || i >= envelope.length) return 0;
+    const a = envelope[i] / 100;
+    const b = (envelope[i + 1] ?? 0) / 100;
+    return a + (b - a) * (pos - i);
+  };
+
+  // ---- まばたき ----
+  let blink = 0, blinkTarget = 0;
+  const scheduleBlink = () => {
+    blinkTarget = 1;
+    setTimeout(() => { blinkTarget = 0; }, 90);
+    setTimeout(scheduleBlink, 2500 + Math.random() * 3500);
+  };
+  setTimeout(scheduleBlink, 2000);
+
+  // =====================================================================
+  //  レンダラ: Live2D > レイヤードPNGパペット > PNG立ち絵2枚
+  // =====================================================================
+  const hidePlaceholder = () => { $("avatar-placeholder").style.display = "none"; };
+
+  // ---- レイヤードPNGパペット (メインの描画モード) ----
+  // avatar/puppet/puppet.json とレイヤーPNGを置くと有効になる。README参照。
+  //
+  // レイヤー定義:
+  //   src     : PNGファイル名 (全レイヤー同じキャンバスサイズで透過書き出し)
+  //   head    : trueなら頭と一緒に傾き・揺れる (省略時は体: 揺れ弱め)
+  //   depth   : 視差の強さ。奥は負、手前は正 (前髪 0.1〜0.2 目安)
+  //   role    : eyes_open / eyes_closed / mouth_open / mouth_closed / blush
+  //             → まばたき・リップシンク・頬の赤みをopacityクロスフェードで駆動
+  //   emotion : happy等を指定すると、その感情のときだけフェードインする差分レイヤー
+  let puppet = null;
+  const setupPuppet = async () => {
+    let spec;
+    try {
+      const r = await fetch("/static/puppet/puppet.json");
+      if (!r.ok) return false;
+      spec = await r.json();
+    } catch (e) { return false; }
+    if (!spec.layers || spec.layers.length === 0) return false;
+    const cont = document.createElement("div");
+    cont.style.cssText = "position:absolute;inset:0;";
+    $("avatar-wrap").appendChild(cont);
+    const layers = [];
+    for (const l of spec.layers) {
+      const img = document.createElement("img");
+      img.src = "/static/puppet/" + l.src;
+      img.style.cssText =
+        "position:absolute;inset:0;width:100%;height:100%;object-fit:contain;will-change:transform,opacity;";
+      cont.appendChild(img);
+      layers.push({
+        el: img,
+        head: !!l.head,
+        depth: l.depth ?? (l.head ? 0.1 : 0),
+        role: l.role || "",
+        emotion: l.emotion || "",
+      });
+    }
+    puppet = { layers };
+    hidePlaceholder();
+    return true;
+  };
+
+  const roleOpacity = (role, openNow) => {
+    switch (role) {
+      case "eyes_open":    return openNow;
+      case "eyes_closed":  return 1 - openNow;
+      case "mouth_open":   return P.mouth;
+      case "mouth_closed": return 1 - P.mouth;
+      case "blush":        return P.blush;
+      default:             return 1;
+    }
+  };
+
+  const puppetRenderer = (p, t) => {
+    // アイドル時の自然な揺れ (複数周期のサインを合成) + 呼吸
+    const swayX = Math.sin(t * 0.00042) * 8 + Math.sin(t * 0.00013) * 5;
+    const breath = Math.sin(t / 1700) * 6;
+    const tilt = p.tilt + Math.sin(t * 0.00023) * 1.1;
+    const openNow = Math.max(0, Math.min(1, p.eyeOpen * (1 - blink)));
+    for (const L of puppet.layers) {
+      const k = L.head ? 1 : 0.35;
+      const dx = swayX * (k + L.depth) + (L.head ? p.lookX * 4 * (1 + L.depth) : 0);
+      const dy = breath * (k * 0.8 + L.depth * 0.4);
+      const rot = tilt * (L.head ? 1 + L.depth * 0.5 : 0.25);
+      L.el.style.transform = `translate(${dx}px, ${dy}px) rotate(${rot}deg)`;
+      let opacity = roleOpacity(L.role, openNow);
+      if (L.emotion) opacity *= emotionBlend[L.emotion] ?? 0;
+      L.el.style.opacity = opacity;
+    }
+  };
+
+  // ---- PNG立ち絵レンダラ (2枚切り替えの簡易フォールバック) ----
+  let pngMode = false;
+  const imgClosed = "/static/avatar_closed.png";
+  const imgOpen = "/static/avatar_open.png";
+  const pngRenderer = (p) => {
+    const img = $("avatar-img");
+    const want = p.mouth > 0.3 ? imgOpen : imgClosed;
+    if (!img.src.endsWith(want)) img.src = want;
+    img.style.transform = `rotate(${p.tilt * 0.6}deg)`;
+  };
+
+  // ---- 1枚絵レンダラ (avatar.png を1枚置くだけ) ----
+  // 2D/3Dモデルを用意するまでの繋ぎ。口パクはできないが、揺れ・呼吸・首の傾き・
+  // 発話中の弾みで「立っているだけの絵」にならないようにする。
+  let singleMode = false;
+  const singleRenderer = (p, t) => {
+    const swayX = Math.sin(t * 0.00042) * 6 + Math.sin(t * 0.00013) * 4;
+    const breath = Math.sin(t / 1700) * 5;
+    const talk = p.mouth * 4;                    // 発話中はわずかに弾む
+    const tilt = p.tilt * 0.8 + Math.sin(t * 0.00023) * 0.8;
+    const scale = 1 + p.mouth * 0.012;
+    $("avatar-img").style.transform =
+      `translate(${swayX + p.lookX * 3}px, ${breath - talk}px) rotate(${tilt}deg) scale(${scale})`;
+  };
+
+  const useStillImage = (url, twoFrame) => {
+    hidePlaceholder();
+    const img = $("avatar-img");
+    img.src = url;
+    img.style.display = "block";
+    if (twoFrame) pngMode = true; else singleMode = true;
+  };
+
+  // ---- Live2D レンダラ ----
+  let live2dModel = null;
+  const loadScript = (src) => new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = src; s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+  const setupLive2D = async (modelUrl) => {
+    await loadScript("https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js");
+    await loadScript("https://cdn.jsdelivr.net/npm/pixi.js@6.5.10/dist/browser/pixi.min.js");
+    await loadScript("https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js");
+
+    const canvas = $("live2d-canvas");
+    canvas.style.display = "block";
+    $("avatar-wrap").style.display = "none";
+
+    const app = new PIXI.Application({
+      view: canvas, backgroundAlpha: 0, autoStart: true,
+      width: window.innerWidth, height: window.innerHeight,
+    });
+    const model = await PIXI.live2d.Live2DModel.from(modelUrl, { autoInteract: false });
+    const scale = (window.innerHeight * 0.85) / model.height;
+    model.scale.set(scale);
+    model.anchor.set(0.5, 1);
+    model.position.set(window.innerWidth * 0.75, window.innerHeight * 1.02);
+    app.stage.addChild(model);
+    live2dModel = model;
+    hidePlaceholder();
+
+    const set = (id, v) => {
+      try { model.internalModel.coreModel.setParameterValueById(id, v); } catch (e) {}
+    };
+    app.ticker.add(() => {
+      const openNow = Math.max(0, P.eyeOpen * (1 - blink));
+      set("ParamMouthOpenY", P.mouth);
+      set("ParamMouthForm", P.smile);
+      set("ParamEyeLOpen", openNow);
+      set("ParamEyeROpen", openNow);
+      set("ParamEyeBallX", P.lookX);
+      set("ParamAngleZ", P.tilt * 2.5);
+      set("ParamBodyAngleZ", P.tilt);
+      set("ParamBrowLY", -P.browY / 10);
+      set("ParamBrowRY", -P.browY / 10);
+      set("ParamBrowLAngle", -P.browAngle * 0.8);
+      set("ParamBrowRAngle", -P.browAngle * 0.8);
+      set("ParamCheek", P.blush);
+    });
+    window.__applyExpression = (name) => {
+      try { model.expression(name); } catch (e) {}
+    };
+  };
+
+  // レンダラ選択
+  fetch("/config").then((r) => r.json()).then(async (cfg) => {
+    if (cfg.live2d_model) {
+      try {
+        await setupLive2D(cfg.live2d_model);
+        return;
+      } catch (e) {
+        console.error("Live2D初期化失敗。次のモードにフォールバックします:", e);
+        $("live2d-canvas").style.display = "none";
+        $("avatar-wrap").style.display = "";
+      }
+    }
+    if (await setupPuppet()) return;
+
+    const exists = async (url) => {
+      try { return (await fetch(url, { method: "HEAD" })).ok; } catch (e) { return false; }
+    };
+
+    // 口の開閉2枚が揃っていればリップシンクありで表示
+    if (await exists(imgClosed) && await exists(imgOpen)) {
+      useStillImage(imgClosed, true);
+      return;
+    }
+    // 1枚絵 (サーバ側が AVATAR_IMAGE か avatar.* を解決して渡してくる。
+    //        任意のファイル名・形式が使える)
+    if (cfg.avatar_image) {
+      useStillImage(cfg.avatar_image, false);
+      return;
+    }
+    // 口パク用の片方だけが置かれている場合も1枚絵として表示する
+    for (const url of [imgClosed, imgOpen]) {
+      if (await exists(url)) {
+        useStillImage(url, false);
+        return;
+      }
+    }
+  }).catch(() => {});
+
+  // =====================================================================
+  //  メインループ
+  // =====================================================================
+  let lastT = performance.now();
+  const loop = (now) => {
+    const dt = Math.min(0.1, (now - lastT) / 1000);
+    lastT = now;
+    const fast = 1 - Math.exp(-dt * 22);
+    const slow = 1 - Math.exp(-dt * 7);
+
+    T.mouth = mouthTarget(now);
+    P.mouth += (T.mouth - P.mouth) * fast;
+    blink += (blinkTarget - blink) * fast;
+    for (const k of ["smile", "eyeOpen", "browY", "browAngle", "blush", "tilt", "lookX"]) {
+      P[k] += (T[k] - P[k]) * slow;
+    }
+    for (const name of Object.keys(emotionBlend)) {
+      const target = name === currentEmotion ? 1 : 0;
+      emotionBlend[name] += (target - emotionBlend[name]) * slow;
+    }
+
+    if (live2dModel) {
+      // Live2Dはticker側で反映済み
+    } else if (puppet) {
+      puppetRenderer(P, now);
+    } else if (pngMode) {
+      pngRenderer(P);
+    } else if (singleMode) {
+      singleRenderer(P, now);
+    }
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+
+  // =====================================================================
+  //  字幕・コメント・WebSocket
+  // =====================================================================
+  let subtitleHideTimer = null;
+  const showSubtitle = (text) => {
+    const el = $("subtitle");
+    el.textContent = text;
+    el.classList.add("visible");
+    clearTimeout(subtitleHideTimer);
+  };
+  const scheduleHideSubtitle = () => {
+    clearTimeout(subtitleHideTimer);
+    subtitleHideTimer = setTimeout(() => $("subtitle").classList.remove("visible"), 4000);
+  };
+
+  const showComment = (ev) => {
+    const card = $("comment-card");
+    $("comment-author").textContent = ev.author;
+    $("comment-amount").textContent = ev.superchat ? (ev.amount || "Super Chat!") : "";
+    $("comment-text").textContent = ev.message;
+    card.classList.toggle("superchat", !!ev.superchat);
+    card.classList.add("visible");
+  };
+
+  const connect = () => {
+    const ws = new WebSocket(`ws://${location.host}/ws`);
+    ws.onmessage = (msg) => {
+      let ev;
+      try { ev = JSON.parse(msg.data); } catch { return; }
+      switch (ev.type) {
+        case "comment":
+          showComment(ev);
+          break;
+        case "reply":
+          showSubtitle(ev.text);
+          if (ev.emotion) {
+            setEmotion(ev.emotion);
+            if (window.__applyExpression) window.__applyExpression(ev.emotion);
+          }
+          break;
+        case "speech":
+          if (ev.state === "start") {
+            speaking = true;
+            envelope = ev.envelope || null;
+            envFrameMs = ev.frame_ms || 50;
+            envStart = performance.now();
+            if (ev.emotion) setEmotion(ev.emotion);
+          } else {
+            speaking = false;
+            envelope = null;
+            scheduleHideSubtitle();
+          }
+          break;
+      }
+    };
+    ws.onclose = () => { speaking = false; envelope = null; setTimeout(connect, 2000); };
+    ws.onerror = () => ws.close();
+  };
+  connect();
+})();
+</script>
+</body>
+</html>

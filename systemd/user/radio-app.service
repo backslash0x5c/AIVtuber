@@ -1,0 +1,14 @@
+[Unit]
+Description=AI radio main application
+PartOf=radio.target
+After=radio-audio.service radio-voicevox.service radio-obs.service
+Wants=radio-voicevox.service radio-obs.service radio-bgm.service
+
+[Service]
+WorkingDirectory=__RADIO_DIR__
+ExecStart=/bin/bash __RADIO_DIR__/scripts/run_app.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=radio.target

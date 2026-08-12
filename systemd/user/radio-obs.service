@@ -1,0 +1,16 @@
+[Unit]
+Description=Headless OBS Studio (RTMP encoder)
+PartOf=radio.target
+After=radio-xvfb.service radio-audio.service
+Requires=radio-xvfb.service radio-audio.service
+
+[Service]
+Environment=DISPLAY=:99
+ExecStart=/bin/bash __RADIO_DIR__/scripts/run_obs.sh
+Restart=always
+RestartSec=5
+# ダイアログ等でOBSが固まった場合、SIGTERMに応じないまま既定90秒待たされるため短縮する
+TimeoutStopSec=20
+
+[Install]
+WantedBy=radio.target
