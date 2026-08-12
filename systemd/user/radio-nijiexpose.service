@@ -1,0 +1,14 @@
+[Unit]
+Description=nijiexpose (Inochi2D avatar renderer, AVATAR_MODE=inochi2d)
+PartOf=radio.target
+After=radio-xvfb.service
+Requires=radio-xvfb.service
+
+[Service]
+Environment=DISPLAY=:99
+ExecStart=/bin/bash __RADIO_DIR__/scripts/run_nijiexpose.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=radio.target

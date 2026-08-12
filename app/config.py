@@ -74,6 +74,16 @@ class Config:
     # 例: LIVE2D_MODEL=live2d/hiyori/hiyori.model3.json
     LIVE2D_MODEL = _str("LIVE2D_MODEL")
 
+    # --- アバター描画モード ---
+    # browser  : オーバーレイ(ブラウザソース)内で描画 (Live2D/パペット/PNG立ち絵)
+    # inochi2d : nijiexpose(ネイティブ)をVMCプロトコルで駆動し、
+    #            OBSの画面キャプチャで取り込む。オーバーレイはUI(字幕等)のみ描画
+    AVATAR_MODE = _str("AVATAR_MODE", "browser")
+    # VMC(OSC/UDP)の送信先。nijiexpose側の受信設定と合わせる
+    VMC_HOST = _str("VMC_HOST", "127.0.0.1")
+    VMC_PORT = _int("VMC_PORT", 39540)
+    VMC_FPS = _int("VMC_FPS", 30)
+
     # --- 挙動 ---
     CHARACTER_NAME = _str("CHARACTER_NAME", "ゆめ")
     IDLE_CHAT_INTERVAL = _int("IDLE_CHAT_INTERVAL", 180)  # 秒: コメントが無い時に雑談するまでの時間
