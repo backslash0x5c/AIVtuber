@@ -45,7 +45,7 @@
     position: absolute; right: 3vw; bottom: 0; width: 62vh; height: 78vh; z-index: 2;
   }
   #avatar-wrap img { width: 100%; height: 100%; }
-  #avatar-img { display: none; object-fit: contain; }
+  #avatar-img { display: none; object-fit: contain; transform-origin: 50% 100%; }
 
   /* アバター未設定時の案内 (アセットを置くと自動で消える) */
   #avatar-placeholder {
@@ -112,8 +112,9 @@
     <img id="avatar-img" alt="avatar">
     <div id="avatar-placeholder">
       アバター未設定<br>
-      <code>avatar/puppet/</code> にレイヤーPNGと <code>puppet.json</code> を置くか、<br>
-      Live2Dモデル(<code>LIVE2D_MODEL</code>)を設定してください。<br>
+      いちばん簡単なのは <code>avatar/avatar.png</code> に立ち絵を1枚置くだけ。<br>
+      口パクさせるなら <code>avatar/puppet/</code> にレイヤーPNGと <code>puppet.json</code>、<br>
+      またはLive2Dモデル(<code>LIVE2D_MODEL</code>)を設定してください。<br>
       詳しくは README「2Dアバターと表情・感情」を参照。
     </div>
   </div>
@@ -285,6 +286,29 @@
     img.style.transform = `rotate(${p.tilt * 0.6}deg)`;
   };
 
+  // ---- 1枚絵レンダラ (avatar.png を1枚置くだけ) ----
+  // 2D/3Dモデルを用意するまでの繋ぎ。口パクはできないが、揺れ・呼吸・首の傾き・
+  // 発話中の弾みで「立っているだけの絵」にならないようにする。
+  let singleMode = false;
+  const imgSingle = "/static/avatar.png";
+  const singleRenderer = (p, t) => {
+    const swayX = Math.sin(t * 0.00042) * 6 + Math.sin(t * 0.00013) * 4;
+    const breath = Math.sin(t / 1700) * 5;
+    const talk = p.mouth * 4;                    // 発話中はわずかに弾む
+    const tilt = p.tilt * 0.8 + Math.sin(t * 0.00023) * 0.8;
+    const scale = 1 + p.mouth * 0.012;
+    $("avatar-img").style.transform =
+      `translate(${swayX + p.lookX * 3}px, ${breath - talk}px) rotate(${tilt}deg) scale(${scale})`;
+  };
+
+  const useStillImage = (url, twoFrame) => {
+    hidePlaceholder();
+    const img = $("avatar-img");
+    img.src = url;
+    img.style.display = "block";
+    if (twoFrame) pngMode = true; else singleMode = true;
+  };
+
   // ---- Live2D レンダラ ----
   let live2dModel = null;
   const loadScript = (src) => new Promise((res, rej) => {
@@ -350,17 +374,23 @@
       }
     }
     if (await setupPuppet()) return;
-    try {
-      const r1 = await fetch(imgClosed, { method: "HEAD" });
-      const r2 = await fetch(imgOpen, { method: "HEAD" });
-      if (r1.ok && r2.ok) {
-        pngMode = true;
-        hidePlaceholder();
-        const img = $("avatar-img");
-        img.src = imgClosed;
-        img.style.display = "block";
+
+    const exists = async (url) => {
+      try { return (await fetch(url, { method: "HEAD" })).ok; } catch (e) { return false; }
+    };
+
+    // 口の開閉2枚が揃っていればリップシンクありで表示
+    if (await exists(imgClosed) && await exists(imgOpen)) {
+      useStillImage(imgClosed, true);
+      return;
+    }
+    // 1枚しか無くても表示する (avatar.png / avatar_closed.png のどちらでも可)
+    for (const url of [imgSingle, imgClosed, imgOpen]) {
+      if (await exists(url)) {
+        useStillImage(url, false);
+        return;
       }
-    } catch (e) {}
+    }
   }).catch(() => {});
 
   // =====================================================================
@@ -390,6 +420,8 @@
       puppetRenderer(P, now);
     } else if (pngMode) {
       pngRenderer(P);
+    } else if (singleMode) {
+      singleRenderer(P, now);
     }
     requestAnimationFrame(loop);
   };

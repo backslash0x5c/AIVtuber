@@ -247,7 +247,27 @@ journalctl --user -u radio-app -f
    ```bash
    python3 scripts/validate_puppet.py
    ```
-3. **PNG立ち絵** — `avatar/avatar_closed.png` / `avatar_open.png` の2枚だけでも動きます(素材の制約上、口パクのみ2値)
+3. **PNG立ち絵(2枚)** — `avatar/avatar_closed.png` / `avatar_open.png` の2枚だけでも動きます(素材の制約上、口パクのみ2値)
+4. **1枚絵** — `avatar/avatar.png` を**1枚置くだけ**。2D/3Dモデルを用意するまでの繋ぎに使えます
+
+### とりあえず1枚絵を表示する (最速)
+
+モデルの準備前でも、立ち絵を1枚置けばすぐ画面に出せます。
+
+```bash
+# 手元PCから転送するか、サーバ上に直接配置する
+scp avatar.png サーバ:~/AIVtuber/avatar/avatar.png
+
+# ブラウザソースを更新 (アプリ再起動でもOK)
+systemctl --user restart radio-app
+```
+
+- 背景透過PNG推奨(不透明でも表示はされます)。縦長のバストアップが収まりやすいサイズです
+- 口パクはできませんが、**揺れ・呼吸・首の傾き・感情による傾き・発話中の弾み**は付きます
+  (完全な静止画にはなりません)
+- `avatar_closed.png` と `avatar_open.png` を両方置くと、自動的に口パクありの2枚モードに切り替わります
+- さらにパペット(`avatar/puppet/`)やLive2Dを設定すると、そちらが優先されます。
+  1枚絵は消さずに残しておいて構いません
 
 ### 差分イラスト3枚方式 (推奨・いちばん簡単)
 

@@ -17,6 +17,7 @@ bgm/*
 !bgm/.gitkeep
 
 # カスタム立ち絵 (各自で配置する)
+avatar/avatar.png
 avatar/avatar_open.png
 avatar/avatar_closed.png
 
