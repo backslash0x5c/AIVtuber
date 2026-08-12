@@ -149,23 +149,90 @@ curl http://127.0.0.1:11434/api/tags  # モデル一覧のJSONが返ればOK
 
 確認できたら、手動起動したVOICEVOXは一旦停止して構いません (この後 systemd が管理します)。
 
-## 起動・停止
+## 運用コマンド早見表
+
+### 覚えるのはこの3つだけ
+
+| やりたいこと | コマンド |
+|---|---|
+| **配信を始める** | `systemctl --user start radio.target` |
+| **配信を終える** | `systemctl --user stop radio.target` |
+| **設定を変えて入れ直す** | `systemctl --user restart radio.target` |
+
+`radio.target` は全部(仮想ディスプレイ・音声・VOICEVOX・OBS・BGM・本体)をまとめた
+親玉です。**基本はこれだけ**を使ってください。
+
+### 構成 (何が動いているか)
+
+```
+radio.target                 ← まとめ役。start/stopはこれに対して行う
+├── radio-xvfb       仮想ディスプレイ (OBSの描画先)
+├── radio-audio      仮想音声シンク radio_mix (声とBGMのミキシング先)
+├── radio-voicevox   音声合成エンジン
+├── radio-obs        OBS本体。YouTubeへRTMP送信する ← 実際に「配信」しているのはコレ
+├── radio-bgm        BGMのループ再生
+└── radio-app        本体。コメント取得→LLM→音声合成→再生の司令塔
+```
+
+### 個別に操作したいとき
 
 ```bash
-# 一括起動 (Xvfb → 仮想シンク → VOICEVOX → OBS → BGM → 本体)
-systemctl --user start radio.target
+# 本体だけ入れ直す (.env のキャラ設定やビデオIDを変えたとき。配信は途切れない)
+systemctl --user restart radio-app
 
-# 状態確認
-systemctl --user status 'radio-*'
+# OBSだけ入れ直す (映像が乱れた・OBSが固まったとき。配信は一度途切れる)
+systemctl --user restart radio-obs
+```
 
-# メインアプリのログを追う
+`.env` の `YOUTUBE_STREAM_KEY`(配信先)を変えたときは、OBSに反映が必要なので
+`restart radio.target` を使ってください。
+
+### 状態を見る
+
+```bash
+# 全体がどうなっているか (これが一番よく使う)
+systemctl --user status 'radio-*' --no-pager
+
+# 困ったとき: 状態・ログ・設定をまとめて出す
+./scripts/diagnose.sh
+```
+
+### ログを見る
+
+ログはユニットごとに分かれています。**まず見るのは `radio-app`** です。
+
+```bash
+# 本体のログをリアルタイムで追う (Ctrl+Cで抜ける) ← 普段はこれ
 journalctl --user -u radio-app -f
 
-# 一括停止
-systemctl --user stop radio.target
+# 直近50行だけ見る (-f を付けないと最後まで表示して終わる)
+journalctl --user -u radio-app -n 50 --no-pager
 
-# OS起動時に自動起動 (setup.shでenable済み)
+# OBSのログ (配信が始まらない・映像が出ないときはこちら)
+journalctl --user -u radio-obs -n 50 --no-pager
+
+# 全ユニットをまとめて時系列で見る
+journalctl --user -u 'radio-*' -n 100 --no-pager
+
+# 今日の分だけ
+journalctl --user -u radio-app --since today --no-pager
+```
+
+| 症状 | 見るログ |
+|---|---|
+| コメントを拾わない・返答しない・声が出ない | `radio-app` |
+| 配信が始まらない・映像が出ない・OBSが落ちる | `radio-obs` |
+| 声だけ出ない | `radio-voicevox` |
+| BGMが鳴らない | `radio-bgm` |
+
+### 自動起動
+
+```bash
+# OS再起動後も自動で始まる (setup.sh で設定済み)
 systemctl --user enable radio.target
+
+# 自動起動をやめる
+systemctl --user disable radio.target
 ```
 
 ### 初回起動後の確認
