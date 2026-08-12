@@ -354,6 +354,36 @@ curl -s http://127.0.0.1:50021/speakers | python3 -m json.tool
 
 ## トラブルシューティング
 
+### `.env` が無い / `OBS_WS_PASSWORD` が見つからない
+
+`OBS_WS_PASSWORD` は **`setup.sh` がリポジトリ直下の `.env` に自動生成**します
+(`.env.example` をコピーして 24文字のランダム文字列を書き込む)。
+OBSにはCLI引数 `--websocket_password` で渡されるので、**OBS側の設定作業は不要**です。
+
+```bash
+# 生成された値の確認
+grep OBS_WS_PASSWORD ~/AIVtuber/.env
+```
+
+`.env` 自体が無い場合、**`setup.sh` が途中で失敗して `.env` 作成まで到達していません**。
+`setup.sh` は冪等なので、原因を解消してから再実行すれば作成されます。
+
+```bash
+cd ~/AIVtuber && ./setup.sh
+```
+
+手動で作る場合は以下でも同じです。
+
+```bash
+cp .env.example .env
+WS_PW=$(head -c 256 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-24)
+sed -i "s/^OBS_WS_PASSWORD=.*/OBS_WS_PASSWORD=$WS_PW/" .env
+grep OBS_WS_PASSWORD .env   # 24文字入っていることを確認
+```
+
+値は自分で決めた文字列でも構いません(OBSと本アプリが同じ値を使えばよいだけです)。
+変更した場合は `systemctl --user restart radio-obs radio-app` で再起動してください。
+
 ### VOICEVOXのインストールが `curl: (23) Failure writing output to destination` で失敗する
 
 ダウンロード先の**空き容量が尽きた**ときのエラーです(多くはRAM上の `/tmp` が満杯)。
