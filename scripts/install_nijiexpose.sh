@@ -38,10 +38,12 @@ echo "展開中..."
 unzip -q "$WORK_DIR/nijiexpose.zip" -d "$WORK_DIR/extract"
 
 # 実行ファイルを含むディレクトリを配置
-BIN_PATH=$(find "$WORK_DIR/extract" -maxdepth 3 -type f -name "nijiexpose" | head -n1)
+# (`| head -n1` は find が SIGPIPE で死んで pipefail に引っかかるため -quit を使う)
+BIN_PATH=$(find "$WORK_DIR/extract" -maxdepth 3 -type f -name "nijiexpose" -print -quit)
 if [[ -z "$BIN_PATH" ]]; then
     echo "エラー: 展開結果に nijiexpose 実行ファイルが見つかりません" >&2
-    find "$WORK_DIR/extract" -maxdepth 3 -type f | head >&2
+    find "$WORK_DIR/extract" -maxdepth 3 -type f > "$WORK_DIR/listing.txt" || true
+    head "$WORK_DIR/listing.txt" >&2 || true
     exit 1
 fi
 
